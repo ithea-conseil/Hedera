@@ -193,6 +193,24 @@ body.ref-panel-collapsed #refPanelToggle{ transform:none }
 }
 .leaflet-tooltip.rich-tooltip .popup-card { grid-template-columns:48px 1fr; }
 .leaflet-tooltip.rich-tooltip img { width:48px; height:48px; border-radius:50%; object-fit:cover }
+/* Tooltip Références : wrap + largeur max raisonnable */
+
+/* Tooltips Leaflet (Références) : largeur max + wrap */
+/* Tooltips Leaflet : largeur lisible, texte horizontal, wrap correct */
+.leaflet-tooltip{
+  width: max-content !important;   /* s'adapte au contenu */
+  max-width: 320px !important;     /* borne haute */
+  white-space: normal !important;  /* autorise les retours à la ligne */
+  word-break: break-word;          /* casse les mots très longs si besoin */
+  writing-mode: horizontal-tb !important; /* évite le texte vertical */
+}
+
+/* Parfois le texte est dans .leaflet-tooltip-content */
+.leaflet-tooltip .leaflet-tooltip-content{
+  writing-mode: horizontal-tb !important;
+  white-space: inherit;
+}
+
 
 /* Clusters (annuaire) */
 .marker-cluster div{
@@ -227,6 +245,9 @@ body.ref-panel-collapsed #refPanelToggle{ transform:none }
 }
 .table tbody tr:hover{ background:rgba(255,255,255,.08); cursor:pointer }
 
+#veilleResults a.awardee-link {
+    color: white;
+}
 
 /* Bouton toggle VEILLE (même comportement/position que Annuaire) */
 #veillePanelToggle{

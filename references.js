@@ -39,6 +39,62 @@ let refActiveCompanies = new Set();
 let refCompanyColors = new Map();
 let refMarkersLayer;
 
+// --- Jitter des marqueurs (répartition en anneaux hexagonaux) ---
+function refJitterLatLng(baseLatLng, indexInGroup, groupSize){
+  if (!refMap) return baseLatLng;
+  const zoom = refMap.getZoom();
+  // amplitude en pixels (diminue quand on zoome)
+  const basePx = Math.max(0, Math.min(18, (14 + zoom) * 2 + 4));
+  if (groupSize <= 1 || basePx === 0) return baseLatLng;
+
+  // Anneaux de 6, 12, 18, ... points
+  let ring = 0, used = 0, cap = 6;
+  while (indexInGroup >= used + cap){
+    used += cap;
+    ring++;
+    cap = 6 + ring * 6;
+  }
+  const idxInRing = indexInGroup - used;
+  const slots = cap;
+
+  const radiusPx = basePx * (ring + 1);
+  const angle = (2 * Math.PI * idxInRing) / slots;
+
+  const p = refMap.latLngToLayerPoint(baseLatLng);
+  const p2 = L.point(p.x + radiusPx * Math.cos(angle), p.y + radiusPx * Math.sin(angle));
+  return refMap.layerPointToLatLng(p2);
+}
+
+// Recalcule la position décalée des marqueurs visibles et les (ré)ajoute au layer
+function refReflowJitter(){
+  if (!refMarkersLayer || !refMap) return;
+  const visibleIdx = refMarkersLayer.__visibleIdx || [];
+
+  // regroupe par coordonnées exactes (~1e-5°)
+  const groups = new Map(); // "lat,lon" -> [indices]
+  visibleIdx.forEach((idx)=>{
+    const r = references[idx];
+    const key = `${(+r.lat).toFixed(5)},${(+r.lon).toFixed(5)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(idx);
+  });
+
+  refMarkersLayer.clearLayers();
+  for (const [key, arr] of groups){
+    const [lat, lon] = key.split(',').map(Number);
+    const base = L.latLng(lat, lon);
+    const n = arr.length;
+    arr.forEach((idx, k)=>{
+      const m = refMarkers[idx];
+      if (!m) return;
+      const j = refJitterLatLng(base, k, n);
+      m.setLatLng(j);
+      refMarkersLayer.addLayer(m);
+    });
+  }
+}
+
+
 /* Format helpers */
 function fmtMoney(v) {
   if (v === null || v === undefined || Number.isNaN(v)) return "-";
@@ -72,6 +128,10 @@ function initRefMap() {
     }).addTo(refMap);
     L.control.zoom({ position: "bottomleft" }).addTo(refMap);
     refMarkersLayer = L.layerGroup().addTo(refMap);
+
+    // Recalcule l’écartement quand on zoome/dézoome
+    refMap.on('zoomend', refReflowJitter);
+
     
     // Force l'invalidation de la taille après un court délai
     setTimeout(() => {
@@ -156,27 +216,28 @@ function refAddMarkers() {
     const color = refCompanyColors.get(ref.entite) || "#2ea76b";
     const icon = L.divIcon({
       className: 'person-marker',
-      html: `<span style="display:block; width:22px; height:22px; border-radius:50%;
+      html: `<span style="display:block; width:18px; height:18px; border-radius:50%;
         background:${color};
         box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
         "></span>`,
-      iconSize: [22, 22]
+      iconSize: [18, 18]
     });
 
     const m = L.marker([ref.lat, ref.lon], { icon, riseOnHover: true, __entite: ref.entite });
 
     // Hover tooltip - format simple comme l'Annuaire
     m.on('mouseover', () => {
-      const tooltip = [ref.intitule, ref.territoire].filter(Boolean).join(" • ");
-      m.bindTooltip(tooltip || "Référence", {
-        className: 'mini-tip',
-        direction: 'top',
-        offset: [0, -14],
-        opacity: 1,
-        permanent: false,
-        sticky: false,
-        interactive: false
-      }).openTooltip();
+    const tooltip = String(ref.intitule || "").trim();
+    m.bindTooltip(tooltip || "Référence", {
+      className: 'mini-tip ref-tip',   // <- extra classe pour cibler le style
+      direction: 'top',
+      offset: [0, -12.5],
+      opacity: 1,
+      permanent: false,
+      sticky: false,
+      interactive: false
+    }).openTooltip();
+
     });
     m.on('mouseout', () => { m.closeTooltip(); });
 
@@ -316,16 +377,16 @@ function refApplyFilters() {
 
   refRenderList(filtered);
   
-  // Update map
+  // Update map (avec jitter)
   if (refMarkersLayer) {
-    refMarkersLayer.clearLayers();
-    const filteredIndices = new Set(filtered.map(r => references.indexOf(r)));
-    refMarkers.forEach((m, idx) => {
-      if (filteredIndices.has(idx)) {
-        refMarkersLayer.addLayer(m);
-      }
-    });
+    // mémorise l’ensemble des indices visibles dans l’ordre de la liste filtrée
+    const idxByRef = new Map(references.map((r,i)=>[r, i]));
+    refMarkersLayer.__visibleIdx = filtered.map(r => idxByRef.get(r));
+
+    // applique l’écartement en fonction du zoom courant
+    refReflowJitter();
   }
+
 }
 
 /* Export to Excel */

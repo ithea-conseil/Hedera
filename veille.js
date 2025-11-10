@@ -4,7 +4,32 @@ const API_BASE = "https://veille-production.up.railway.app";
 let veilleMap;           // carte Leaflet dédiée à la veille
 let veilleLayer = null;  // calque points veille
 let currentRows = [];    // lignes affichées
-const MAP_MAX_DEFAULT = 200;
+const MAP_MAX_DEFAULT = 500;
+
+let veilleOMS = null;
+let _veilleLastMapMax = MAP_MAX_DEFAULT;
+
+function veilleJitterLatLng(baseLatLng, indexInGroup, groupSize){
+  if (!veilleMap) return baseLatLng;
+  const zoom = veilleMap.getZoom();
+  // Amplitude en px (diminue quand on zoome un peu)
+  const basePx = Math.max(0, Math.min(14, (10 + zoom) * 2 + 2));
+  if (groupSize <= 1 || basePx === 0) return baseLatLng;
+
+  // Anneaux de 6, 12, 18… positions (répartition hexagonale)
+  let ring = 0, used = 0, cap = 6;
+  while (indexInGroup >= used + cap){ used += cap; ring++; cap = 6 + ring * 6; }
+  const idxInRing = indexInGroup - used;
+  const slots = cap;
+
+  const radiusPx = basePx * (ring + 1);
+  const angle = (2 * Math.PI * idxInRing) / slots;
+
+  const p  = veilleMap.latLngToLayerPoint(baseLatLng);
+  const p2 = L.point(p.x + radiusPx * Math.cos(angle), p.y + radiusPx * Math.sin(angle));
+  return veilleMap.layerPointToLatLng(p2);
+}
+
 
 /* UI */
 const TAB_ANN     = document.querySelector('.tab-chip[data-tab="annuaire"]');
@@ -34,6 +59,17 @@ const V_LIST  = document.getElementById("veilleList");
 const V_EMPTY = document.getElementById("veilleEmpty");
 
 /* Utils */
+function escHTML(s){ return String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function escAttr(s){ return escHTML(s).replace(/"/g,"&quot;"); }
+
+function triggerAwardeeSearch(name){
+  if (!name) return;
+  if (V_SEARCH) V_SEARCH.value = "";
+  // if (V_AWARD) V_AWARD.value = name; // optionnel si tu gardes le champ un jour
+  runSearch({ awardee: name });
+}
+
+
 const qs = (obj)=>
   Object.entries(obj)
     .filter(([,v]) => v !== undefined && v !== null && v !== "")
@@ -72,16 +108,61 @@ function initVeilleMap(){
   }).addTo(veilleMap);
   L.control.zoom({position:"bottomleft"}).addTo(veilleMap);
   ensureVeilleLayer();
+
+  if (!veilleOMS && window.OverlappingMarkerSpiderfier){
+    veilleOMS = new OverlappingMarkerSpiderfier(veilleMap, {
+      keepSpiderfied: true,
+      nearbyDistance: 12,
+      circleSpiralSwitchover: 12
+    });
+  }
+  veilleMap.on('zoomend', ()=>{
+    if (currentRows && currentRows.length){
+      const limit = parseInt(V_LIMIT.value || "50", 10);
+      const mapMax = Math.min(limit, MAP_MAX_DEFAULT, _veilleLastMapMax || MAP_MAX_DEFAULT);
+      // AVANT : renderMap(currentRows, mapMax);
+      renderMap(currentRows, mapMax, { preserveView:true });
+    }
+  });
+
+
+  // if (!_popupLinkWired){
+  //   veilleMap.on("popupopen", (e)=>{
+  //     const root = e?.popup?.getElement();
+  //     if (!root) return;
+  //     root.querySelectorAll(".awardee-link").forEach(a=>{
+  //       a.addEventListener("click", (ev)=>{
+  //         ev.preventDefault();
+  //         const name = (a.dataset.awardee || a.textContent || "").trim();
+  //         runSearch({ awardee: name }); // seulement awardee + limit
+  //         try { veilleMap.closePopup(); } catch(_) {}
+  //       }, { once:false });
+  //     });
+  //   });
+  //   _popupLinkWired = true;
+  // }
 }
 
-function renderMap(rows, mapMax){
+function renderMap(rows, mapMax, opts = {}){
+  const preserveView = !!opts.preserveView;
   ensureVeilleLayer();
   if (!veilleLayer) return;
   veilleLayer.clearLayers();
 
+  _veilleLastMapMax = mapMax;
+
+  // 1) Filtre + cap
   const pts = rows
     .slice(0, mapMax)
     .filter(r => Number.isFinite(+r.acheteur_latitude) && Number.isFinite(+r.acheteur_longitude));
+
+  // 2) Groupes de coordonnées exactes (~1e-5°)
+  const groups = new Map(); // key "lat,lon" -> [row, row, ...]
+  for (const r of pts){
+    const key = `${(+r.acheteur_latitude).toFixed(5)},${(+r.acheteur_longitude).toFixed(5)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
 
   const icon = () => L.divIcon({
     className: 'veille-marker',
@@ -94,39 +175,64 @@ function renderMap(rows, mapMax){
   const fmtDate  = (d)=> (d ? new Date(d).toLocaleDateString('fr-FR') : "");
 
   const markers = [];
-  pts.forEach(r=>{
-    const lat = +r.acheteur_latitude, lon = +r.acheteur_longitude;
-    const m = L.marker([lat, lon], { icon: icon(), riseOnHover:true });
 
-    const objet = String(r.objet||"");
-    const objShort = objet.length > 300 ? objet.slice(0,300) + "…" : objet;
+  // 3) Pour chaque groupe, on place les points en anneaux autour de la coordonnée de base
+  for (const [key, arr] of groups){
+    const [baseLat, baseLon] = key.split(',').map(Number);
+    const base = L.latLng(baseLat, baseLon);
 
-    const html = `
-      <div class="popup-veille">
-        <div class="title">${r.acheteur_nom ?? ""}</div>
-        <div class="subtitle">${r.titulaire_nom ?? ""}</div>
+    arr.forEach((r, k)=>{
+      const latlng = veilleJitterLatLng(base, k, arr.length);  // <-- décalage doux
 
-        <div class="badges">
-          ${r.procedure ? `<span class="v-badge">${r.procedure}</span>` : ""}
-          ${r.acheteur_region_nom ? `<span class="v-badge">${r.acheteur_region_nom}</span>` : ""}
-        </div>
-        <div class="badges">
-             ${r.montant ? `<span class="v-badge">${fmtMoney(r.montant)}</span>` : ""}
-             ${r.dateNotification ? `<span class="v-badge">${fmtDate(r.dateNotification)}</span>` : ""}
-        </div>
+      const buyerName = String(r.acheteur_nom || "").trim();
+      const m = L.marker(latlng, { icon: icon(), riseOnHover:true });
 
+      if (buyerName){
+        m.bindTooltip(buyerName, {
+          direction: 'top',
+          offset: [0, -10],
+          opacity: 0.95,
+          sticky: true
+        });
+      }
 
-        ${objShort ? `<div class="v-obj" title="${objet.replace(/"/g,'&quot;')}">${objShort}</div>` : ""}
-      </div>`;
-    m.bindPopup(html, { className:'rich-popup', autoPan:true });
-    veilleLayer.addLayer(m);
-    markers.push(m);
-  });
+      const objet = String(r.objet||"");
+      const objShort = objet.length > 300 ? objet.slice(0,300) + "…" : objet;
 
-  if (markers.length){
-    try { veilleMap.fitBounds(L.featureGroup(markers).getBounds().pad(0.2)); } catch(e){}
+      const html = `
+        <div class="popup-veille">
+          <div class="title">${r.acheteur_nom ?? ""}</div>
+          <div class="subtitle">
+            ${r.titulaire_nom
+              ? `<a href="#" class="awardee-link" data-awardee="${escAttr(r.titulaire_nom)}" title="Filtrer sur ce titulaire">${escHTML(r.titulaire_nom)}</a>`
+              : ""
+            }
+          </div>
+          <div class="badges">
+            ${r.procedure ? `<span class="v-badge">${r.procedure}</span>` : ""}
+            ${r.acheteur_region_nom ? `<span class="v-badge">${r.acheteur_region_nom}</span>` : ""}
+          </div>
+          <div class="badges">
+               ${r.montant ? `<span class="v-badge">${fmtMoney(r.montant)}</span>` : ""}
+               ${r.dateNotification ? `<span class="v-badge">${fmtDate(r.dateNotification)}</span>` : ""}
+          </div>
+          ${objShort ? `<div class="v-obj" title="${objet.replace(/"/g,'&quot;')}">${objShort}</div>` : ""}
+        </div>`;
+      m.bindPopup(html, { className:'rich-popup', autoPan:true });
+
+      veilleLayer.addLayer(m);
+      if (veilleOMS) veilleOMS.addMarker(m);        // <-- spiderfy au clic
+      markers.push(m);
+    });
+  }
+
+  if (!preserveView && markers.length){
+    try { 
+      veilleMap.fitBounds(L.featureGroup(markers).getBounds().pad(0.2)); 
+    } catch(e){}
   }
 }
+
 /* ---- Cartes (remplace la table/UID masqué) ---- */
 function renderCards(rows){
   currentRows = rows;
@@ -150,8 +256,12 @@ function renderCards(rows){
     return `
       <li class="v-card" data-lat="${lat}" data-lon="${lon}">
         <div class="title">${r.acheteur_nom ?? ""}</div>
-        <div class="subtitle">${r.titulaire_nom ?? ""}</div>
-
+        <div class="subtitle">
+          ${r.titulaire_nom
+            ? `<a href="#" class="awardee-link" data-awardee="${escAttr(r.titulaire_nom)}" title="Filtrer sur ce titulaire">${escHTML(r.titulaire_nom)}</a>`
+            : ""
+          }
+        </div>
         <div class="badges">
           ${r.procedure ? `<span class="v-badge">${r.procedure}</span>` : ""}
           ${r.acheteur_region_nom ? `<span class="v-badge">${r.acheteur_region_nom}</span>` : ""}
@@ -184,6 +294,17 @@ function renderCards(rows){
     const btn = card.querySelector('[data-action="focus"]');
     if (btn) btn.addEventListener("click", (e)=>{ e.stopPropagation(); go(); });
   });
+
+  // Clic sur le titulaire dans la liste : ne pas déclencher le flyTo de la carte
+  V_LIST.querySelectorAll(".awardee-link").forEach(a=>{
+    a.addEventListener("click", (e)=>{
+      e.preventDefault();
+      e.stopPropagation(); // empêche le handler .v-card de se déclencher
+      const name = (a.dataset.awardee || a.textContent || "").trim();
+      runSearch({ awardee: name }); // relance avec seulement awardee + limit
+    });
+  });
+
 }
 
 /* ---- API (unique fetch pour carte + cards) ---- */
@@ -214,10 +335,15 @@ function exportExcel(){
 }
 
 /* ---- Flux “Rechercher” ---- */
-/* ---- Flux “Rechercher” ---- */
-async function runSearch(){
-  const q = V_SEARCH.value || "";
-  const awardees = V_AWARD.value || "";
+async function runSearch(opts = {}){
+  const override = opts.awardee && String(opts.awardee).trim();
+
+  // Si on clique sur un titulaire : on ignore q
+  const q = override ? "" : (V_SEARCH ? (V_SEARCH.value || "") : "");
+
+  // awardee depuis l’override (clic) ou depuis le champ (s’il existe encore)
+  const awardees = override || (V_AWARD ? (V_AWARD.value || "") : "");
+
   const limit = parseInt(V_LIMIT.value || "50", 10);
   const mapMax = Math.min(limit, MAP_MAX_DEFAULT);
 
@@ -258,7 +384,7 @@ function switchToVeille(){
   initVeilleMap();
   setTimeout(() => { try { veilleMap.invalidateSize(); } catch(e){} }, 30);
 
-  clearVeille(); // carte vide tant que pas “Rechercher”
+  // clearVeille(); // carte vide tant que pas “Rechercher”
 }
 
 function switchToAnnuaireOrRefs(){
@@ -290,7 +416,8 @@ function initVeille(){
   // Enter ↵ déclenche la recherche depuis q ET awardee
   const handleEnter = (e)=>{ if (e.key === "Enter") runSearch(); };
   V_SEARCH.addEventListener("keydown", handleEnter);
-  V_AWARD.addEventListener("keydown", handleEnter);
+  if (V_AWARD) V_AWARD.addEventListener("keydown", handleEnter);
+
 
   if (V_TOGGLE){
     V_TOGGLE.addEventListener("click", ()=>{
@@ -299,6 +426,16 @@ function initVeille(){
       V_TOGGLE.setAttribute("aria-expanded", String(!collapsed));
     });
   }
+  // Délégation globale : clic sur un nom de titulaire => relance la recherche
+  document.addEventListener("click", (e) => {
+    const el = e.target.closest(".awardee-link");
+    if (!el) return;
+    e.preventDefault();
+    e.stopPropagation(); // évite le flyTo de la carte quand on clique dans une carte
+    const name = (el.dataset.awardee || el.textContent || "").trim();
+    triggerAwardeeSearch(name);
+  });
+
 }
 
 document.addEventListener("DOMContentLoaded", initVeille);
