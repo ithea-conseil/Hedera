@@ -390,16 +390,29 @@ function refApplyFilters() {
 }
 
 /* Export to Excel */
+/* Export to Excel */
 function refExportExcel() {
-  if (!window.XLSX) { alert("Bibliothèque XLSX absente"); return; }
-  
+  if (!window.XLSX) { 
+    alert("Bibliothèque XLSX absente"); 
+    return; 
+  }
+
   const refSearchInput = document.getElementById("refSearch");
-  const q = refSearchInput.value || "";
-  const tks = refTokens(q);
+  const rawQuery = (refSearchInput.value || "").trim();
+  const tks = refTokens(rawQuery);
+
   const filtered = references.filter(ref => {
     if (!refActiveCompanies.has(ref.entite)) return false;
     if (!tks.length) return true;
-    const hay = refNorm([ref.entite, ref.intitule, ref.territoire, ref.annee, ref.cheffe, ref.nomReferent, ref.titreReferent].join(" "));
+    const hay = refNorm([
+      ref.entite,
+      ref.intitule,
+      ref.territoire,
+      ref.annee,
+      ref.cheffe,
+      ref.nomReferent,
+      ref.titreReferent
+    ].join(" "));
     return tks.every(t => hay.includes(t));
   });
 
@@ -419,9 +432,53 @@ function refExportExcel() {
   const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Références");
-  const fname = `references_filtrees_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+  // --- Construction du nom de fichier ---
+
+  // 1) valeur de l'input refSearch
+  const searchPart = rawQuery;
+
+  // 2) nom du .chip.active s'il y en a un seul
+  const activeChips = document.querySelectorAll("#refFilters .chip.active");
+  let chipPart = "";
+  if (activeChips.length === 1) {
+    chipPart = (activeChips[0].dataset.value || activeChips[0].textContent || "").trim();
+  }
+
+  // 3) date du jour (YYYY-MM-DD)
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  // 4) petite fonction pour nettoyer les morceaux (accents, espaces, etc.)
+  const slug = (str) => {
+    return String(str || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // sans accents
+      .replace(/[^a-zA-Z0-9-_]+/g, "_")                // caractères spéciaux -> "_"
+      .replace(/^_+|_+$/g, "");                        // pas de "_" en début/fin
+  };
+
+  const parts = [];
+
+  if (searchPart) {
+    parts.push(slug(searchPart));
+  }
+
+  if (chipPart) {
+    parts.push(slug(chipPart));
+  }
+
+  parts.push(dateStr); // toujours la date
+
+  let baseName = parts.join("_");
+  if (!baseName) {
+    // fallback si vraiment tout est vide (par prudence)
+    baseName = `references_filtrees_${dateStr}`;
+  }
+
+  const fname = `${baseName}.xlsx`;
+
   XLSX.writeFile(wb, fname);
 }
+
 
 /* Bootstrap References module */
 async function initReferences() {
