@@ -391,6 +391,7 @@ function refApplyFilters() {
 
 /* Export to Excel */
 /* Export to Excel */
+/* Export to Excel */
 function refExportExcel() {
   if (!window.XLSX) { 
     alert("Bibliothèque XLSX absente"); 
@@ -448,36 +449,41 @@ function refExportExcel() {
   // 3) date du jour (YYYY-MM-DD)
   const dateStr = new Date().toISOString().slice(0, 10);
 
-  // 4) petite fonction pour nettoyer les morceaux (accents, espaces, etc.)
+  // 4) fonction pour nettoyer les morceaux (accents, espaces, etc.)
   const slug = (str) => {
     return String(str || "")
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // sans accents
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // enlève les accents
       .replace(/[^a-zA-Z0-9-_]+/g, "_")                // caractères spéciaux -> "_"
-      .replace(/^_+|_+$/g, "");                        // pas de "_" en début/fin
+      .replace(/^_+|_+$/g, "");                        // supprime "_" début/fin
   };
+
+  const hasSearch = !!searchPart;
+  const hasChip   = !!chipPart;
 
   const parts = [];
 
-  if (searchPart) {
+  // ⬇️ Par défaut, quand il n’y a AUCUN filtre, on ajoute "references_"
+  if (!hasSearch && !hasChip) {
+    parts.push("references"); // équivalent "références", déjà sans accent
+  }
+
+  if (hasSearch) {
     parts.push(slug(searchPart));
   }
 
-  if (chipPart) {
+  if (hasChip) {
     parts.push(slug(chipPart));
   }
 
-  parts.push(dateStr); // toujours la date
+  // la date est toujours présente en dernier
+  parts.push(dateStr);
 
-  let baseName = parts.join("_");
-  if (!baseName) {
-    // fallback si vraiment tout est vide (par prudence)
-    baseName = `references_filtrees_${dateStr}`;
-  }
-
+  const baseName = parts.join("_");
   const fname = `${baseName}.xlsx`;
 
   XLSX.writeFile(wb, fname);
 }
+
 
 
 /* Bootstrap References module */

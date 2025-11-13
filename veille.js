@@ -296,14 +296,16 @@ function renderCards(rows){
   });
 
   // Clic sur le titulaire dans la liste : ne pas déclencher le flyTo de la carte
+  // Clic sur le titulaire dans la liste : recherche par awardee + on vide veilleSearch
   V_LIST.querySelectorAll(".awardee-link").forEach(a=>{
     a.addEventListener("click", (e)=>{
       e.preventDefault();
-      e.stopPropagation(); // empêche le handler .v-card de se déclencher
+      e.stopPropagation(); // empêche le handler .v-card (flyTo) de se déclencher
       const name = (a.dataset.awardee || a.textContent || "").trim();
-      runSearch({ awardee: name }); // relance avec seulement awardee + limit
+      triggerAwardeeSearch(name); // vide V_SEARCH + runSearch({ awardee: name })
     });
   });
+
 
 }
 
@@ -325,14 +327,64 @@ async function fetchRowsCombined({ q, awardees, limit }){
 }
 
 /* ---- Export ---- */
+/* ---- Export ---- */
 function exportExcel(){
-  if (!window.XLSX){ alert("Bibliothèque XLSX absente"); return; }
+  if (!window.XLSX){ 
+    alert("Bibliothèque XLSX absente"); 
+    return; 
+  }
+
   const ws = XLSX.utils.json_to_sheet(currentRows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Marchés");
-  const fname = `marches_filtres_${new Date().toISOString().slice(0,10)}.xlsx`;
+
+  // --- Construction du nom de fichier pour la veille ---
+
+  // 1) Recherche plein texte actuelle
+  const rawSearch = ((V_SEARCH && V_SEARCH.value) || "").trim();
+
+  // 2) On essaie de déduire l'awardee à partir des résultats affichés
+  const awardeeSet = new Set();
+  currentRows.forEach(r => {
+    const name = (r.titulaire_nom || "").trim();
+    if (name) awardeeSet.add(name);
+  });
+  const uniqueAwardees = Array.from(awardeeSet);
+
+  // 3) Date du jour (YYYY-MM-DD)
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  // 4) Fonction pour nettoyer le texte (accents, espaces, etc.)
+  const slug = (str) => {
+    return String(str || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // enlève les accents
+      .replace(/[^a-zA-Z0-9-_]+/g, "_")                // caractères spéciaux -> "_"
+      .replace(/^_+|_+$/g, "");                        // supprime "_" début/fin
+  };
+
+  // 5) Choix du libellé principal :
+  //    - si AUCUNE recherche texte et UN SEUL titulaire → on utilise l'awardee
+  //    - sinon → on utilise veilleSearch
+  let mainLabel = "";
+  if (!rawSearch && uniqueAwardees.length === 1){
+    mainLabel = uniqueAwardees[0];         // awardee détecté
+  } else {
+    mainLabel = rawSearch;                 // texte de recherche
+  }
+
+  // 6) Construction finale du nom
+  let baseName;
+  if (mainLabel){
+    baseName = `${slug(mainLabel)}_${dateStr}`;
+  } else {
+    // rien dans awardee ni veilleSearch : "marchés_YYYY-MM-DD"
+    baseName = `marchés_${dateStr}`;
+  }
+
+  const fname = `${baseName}.xlsx`;
   XLSX.writeFile(wb, fname);
 }
+
 
 /* ---- Flux “Rechercher” ---- */
 async function runSearch(opts = {}){
