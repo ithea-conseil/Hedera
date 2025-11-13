@@ -97,7 +97,7 @@ function refReflowJitter(){
 
 /* Format helpers */
 function fmtMoney(v) {
-  if (v === null || v === undefined || Number.isNaN(v)) return "-";
+  if (v === null || v === undefined || Number.isNaN(v)) return "";
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 }
 
@@ -256,20 +256,38 @@ function refOpenPopup(ref, marker) {
   const color = refCompanyColors.get(ref.entite) || "#2ea76b";
   const initial = (ref.entite || "?").charAt(0).toUpperCase();
   
-  const html = `
-    <div class="popup-card">
+const html = `
+  <div class="popup-card ref-popup-card">
+    ${ref.territoire ? `<div class="territory-pill">${ref.territoire}</div>` : ""}
+
+    <div class="ref-popup-main">
       <div style="width:50px; height:50px; min-width:50px; border-radius:50%; background:${color}; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:18px;">
         ${initial}
       </div>
-      <div>
-        <div class="name">${ref.intitule || "-"}</div>
-        <div class="meta">${ref.entite || "-"} ${ref.territoire ? "• " + ref.territoire : ""}</div>
-        <div class="meta">${ref.annee || "-"} ${ref.cheffe ? "• " + ref.cheffe : ""}</div>
-        <div class="meta"><strong>Référent :</strong> ${ref.titreReferent || ""} ${ref.nomReferent || ""}</div>
-        <div class="meta">${ref.tel || "-"} ${ref.mail ? `• <a href="mailto:${ref.mail}">${ref.mail}</a>` : ""}</div>
-        <div class="meta"><strong>Montant :</strong> ${fmtMoney(ref.montant)}</div>
+      <div class="ref-popup-body">
+        <div class="name">${ref.intitule || ""}</div>
+
+        <div class="meta">
+          ${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}
+        </div>
+
+        ${(ref.titreReferent || ref.nomReferent) 
+          ? `<div class="meta"><strong>Référent :</strong> ${ref.titreReferent || ""} ${ref.nomReferent || ""}</div>`
+          : ""}
+
+        <div class="meta">
+          ${ref.tel || ""} 
+          ${ref.mail ? `• <a href="mailto:${ref.mail}">${ref.mail}</a>` : ""}
+        </div>
+
+        ${ref.montant != null && ref.montant !== ""
+          ? `<div class="meta"><strong>Montant :</strong> ${fmtMoney(ref.montant)}</div>`
+          : ""}
       </div>
-    </div>`;
+    </div>
+  </div>`;
+
+
 
   marker.unbindPopup();
   marker.bindPopup(html, {
@@ -300,21 +318,27 @@ function refRenderList(items) {
     const color = refCompanyColors.get(ref.entite) || '#2ea76b';
     const initial = (ref.entite || "?").charAt(0).toUpperCase();
     
+    // ➜ plus de bouton "Voir sur la carte"
     li.innerHTML = `
-      <div style="width:50px; height:50px; min-width:50px; border-radius:50%; background:${color}; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:18px; border:2px solid rgba(255,255,255,.35);">
-        ${initial}
-      </div>
-      <div>
-        <div class="name">${ref.intitule || "-"}</div>
-        <div class="meta">${ref.entite || ""} ${ref.territoire ? "• " + ref.territoire : ""}</div>
-        <div class="meta">${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}</div>
-        <div class="meta">${fmtMoney(ref.montant)}</div>
-        <div class="actions">
-          <button class="btn" data-action="focus">Voir sur la carte</button>
+      ${ref.territoire 
+        ? `<div class="territory-pill">${ref.territoire}</div>` 
+        : ""}
+
+      <div class="person-main">
+        <div class="person-avatar" style="width:50px; height:50px; min-width:50px; border-radius:50%; background:${color}; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:18px; border:2px solid rgba(255,255,255,.35);">
+          ${initial}
+        </div>
+        <div class="person-body">
+          <div class="name">${ref.intitule || ""}</div>
+          <div class="meta">${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}</div>
+          <div class="meta">${fmtMoney(ref.montant)}</div>
         </div>
       </div>
     `;
-    li.querySelector('[data-action="focus"]').addEventListener("click", () => {
+
+
+    // ➜ clic sur toute la ligne = comportement "Voir sur la carte"
+    li.addEventListener("click", () => {
       const idx = references.indexOf(ref);
       const m = refMarkers[idx];
       if (m && refMap) {
@@ -322,10 +346,12 @@ function refRenderList(items) {
         setTimeout(() => m.fire('click'), 520);
       }
     });
+
     frag.appendChild(li);
   });
   refItemsList.appendChild(frag);
 }
+
 
 /* Render company chips */
 function refRenderCompanyChips(all) {
