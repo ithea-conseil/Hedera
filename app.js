@@ -149,6 +149,106 @@ function reflowJitter(){
 }
 
 
+/* DROM inset maps configuration */
+const DROM_CONFIGS = [
+  { name: "Guadeloupe", center: [16.25, -61.58], zoom: 9, bounds: [[15.8, -61.9], [16.6, -61.2]] },
+  { name: "Martinique", center: [14.64, -61.02], zoom: 10, bounds: [[14.3, -61.3], [15.0, -60.7]] },
+  { name: "Guyane", center: [3.93, -53.12], zoom: 7, bounds: [[2.0, -54.6], [5.8, -51.6]] },
+  { name: "La Réunion", center: [-21.11, 55.53], zoom: 10, bounds: [[-21.4, 55.2], [-20.8, 55.8]] },
+  { name: "Mayotte", center: [-12.83, 45.14], zoom: 11, bounds: [[-13.0, 44.9], [-12.6, 45.4]] }
+];
+
+let dromMaps = [];
+let dromLayers = [];
+
+function isDromCoord(lat, lon) {
+  // Check if coordinates are in DROM bounds
+  for (const drom of DROM_CONFIGS) {
+    const [[minLat, minLon], [maxLat, maxLon]] = drom.bounds;
+    if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
+      return drom;
+    }
+  }
+  return null;
+}
+
+function initDromMaps(containerId, onMarkerClick) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  // Clear existing
+  dromMaps.forEach(m => m.remove());
+  dromMaps = [];
+  dromLayers = [];
+  container.innerHTML = '';
+
+  DROM_CONFIGS.forEach((drom, idx) => {
+    const inset = document.createElement('div');
+    inset.className = 'drom-inset';
+    inset.style.display = 'none'; // Hidden by default, shown when markers are added
+
+    const mapDiv = document.createElement('div');
+    mapDiv.className = 'drom-map';
+    mapDiv.id = `drom-map-${idx}`;
+
+    const label = document.createElement('div');
+    label.className = 'drom-label';
+    label.textContent = drom.name;
+
+    inset.appendChild(mapDiv);
+    inset.appendChild(label);
+    container.appendChild(inset);
+
+    // Create mini Leaflet map
+    const miniMap = L.map(mapDiv.id, {
+      zoomControl: false,
+      attributionControl: false,
+      dragging: false,
+      scrollWheelZoom: false,
+      doubleClickZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      touchZoom: false
+    }).setView(drom.center, drom.zoom);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19
+    }).addTo(miniMap);
+
+    const layer = L.layerGroup().addTo(miniMap);
+
+    dromMaps.push({ map: miniMap, config: drom, inset, layer });
+    dromLayers.push(layer);
+  });
+}
+
+function addDromMarker(dromIndex, lat, lon, color, clickHandler) {
+  if (dromIndex < 0 || dromIndex >= dromMaps.length) return;
+
+  const { map, inset, layer } = dromMaps[dromIndex];
+
+  // Show inset if hidden
+  if (inset.style.display === 'none') {
+    inset.style.display = 'block';
+  }
+
+  const icon = L.divIcon({
+    className: 'person-marker',
+    html: `<span style="display:block; width:18px; height:18px; border-radius:50%;
+      background:${color};
+      box-shadow:0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);"></span>`,
+    iconSize: [18, 18]
+  });
+
+  const marker = L.marker([lat, lon], { icon });
+  if (clickHandler) {
+    marker.on('click', clickHandler);
+  }
+  layer.addLayer(marker);
+
+  return marker;
+}
+
 /* Map */
 function initMap(){
   map = L.map("map", { zoomControl:false }).setView([46.71109, 1.7191036], 6);
@@ -163,6 +263,9 @@ function initMap(){
 
   // À chaque zoom, on recalcule le jitter pour les marqueurs visibles
   map.on('zoomend', reflowJitter);
+
+  // Init DROM inset maps
+  initDromMaps('dromContainer');
 }
 
 
@@ -302,41 +405,58 @@ function addMarkers(){
   markers.forEach(m => m.remove());
   markers = [];
 
+  // Clear DROM layers
+  dromLayers.forEach(layer => layer.clearLayers());
+  dromMaps.forEach(({ inset }) => { inset.style.display = 'none'; });
+
   people.forEach((p)=>{
     const color = companyColors.get(p.entite) || "#2ea76b";
-    const icon = L.divIcon({
-      className: 'person-marker',
-      html: `
-        <span style="
-          display:block; width:22px; height:22px; border-radius:50%;
-          background:${color};
-          box-shadow:
-            0 0 0 2px rgba(255,255,255,.95) inset,
-            0 0 0 1px rgba(0,0,0,.45);
-        "></span>`,
-      iconSize: [22,22]
-    });
 
-    const m = L.marker([p.lat, p.lon], { icon, riseOnHover:true, __entite: p.entite });
+    // Check if marker is in DROM
+    const dromConfig = isDromCoord(p.lat, p.lon);
 
-    // --- Hover: étiquette simple, non interactive, qui se ferme en sortant du point ---
-    m.on('mouseover', () => {
-      m.bindTooltip(simpleTipText(p), {
-        className: 'mini-tip',
-        direction: 'top',
-        offset: [0,-14],
-        opacity: 1,
-        permanent: false,
-        sticky: false,     // reste affichée uniquement tant que la souris est "sur" le point
-        interactive: false // même si on passe sur l’étiquette, elle ne garde pas le focus
-      }).openTooltip();
-    });
-    m.on('mouseout', () => { m.closeTooltip(); });
+    if (dromConfig) {
+      // Add to DROM inset map
+      const dromIndex = DROM_CONFIGS.findIndex(d => d.name === dromConfig.name);
+      if (dromIndex >= 0) {
+        addDromMarker(dromIndex, p.lat, p.lon, color, () => openPopup(p, null));
+      }
+    } else {
+      // Add to main map
+      const icon = L.divIcon({
+        className: 'person-marker',
+        html: `
+          <span style="
+            display:block; width:22px; height:22px; border-radius:50%;
+            background:${color};
+            box-shadow:
+              0 0 0 2px rgba(255,255,255,.95) inset,
+              0 0 0 1px rgba(0,0,0,.45);
+          "></span>`,
+        iconSize: [22,22]
+      });
 
-    // --- Clic: fiche complète (popup) ---
-    m.on('click', () => openPopup(p, m));
+      const m = L.marker([p.lat, p.lon], { icon, riseOnHover:true, __entite: p.entite });
 
-    markers.push(m);
+      // --- Hover: étiquette simple, non interactive, qui se ferme en sortant du point ---
+      m.on('mouseover', () => {
+        m.bindTooltip(simpleTipText(p), {
+          className: 'mini-tip',
+          direction: 'top',
+          offset: [0,-14],
+          opacity: 1,
+          permanent: false,
+          sticky: false,     // reste affichée uniquement tant que la souris est "sur" le point
+          interactive: false // même si on passe sur l'étiquette, elle ne garde pas le focus
+        }).openTooltip();
+      });
+      m.on('mouseout', () => { m.closeTooltip(); });
+
+      // --- Clic: fiche complète (popup) ---
+      m.on('click', () => openPopup(p, m));
+
+      markers.push(m);
+    }
   });
 }
 
@@ -783,11 +903,12 @@ function exportMapJPG(mapId, title) {
 
     const dot = document.createElement("div");
     dot.style.cssText = `
-      width: 12px;
-      height: 12px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: ${color};
-      border: 2px solid rgba(0,0,0,0.2);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
+      flex-shrink: 0;
     `;
 
     const label = document.createElement("span");
@@ -812,15 +933,34 @@ function exportMapJPG(mapId, title) {
     allowTaint: true,
     backgroundColor: '#0c0f0e',
     scale: 2
-  }).then(canvas => {
+  }).then(sourceCanvas => {
     // Supprimer l'overlay
     overlay.remove();
 
-    // Télécharger l'image
+    // Créer un canvas carré en prenant le minimum des dimensions
+    const squareSize = Math.min(sourceCanvas.width, sourceCanvas.height);
+    const squareCanvas = document.createElement('canvas');
+    squareCanvas.width = squareSize;
+    squareCanvas.height = squareSize;
+
+    const ctx = squareCanvas.getContext('2d');
+
+    // Calculer les offsets pour centrer l'image
+    const offsetX = (sourceCanvas.width - squareSize) / 2;
+    const offsetY = (sourceCanvas.height - squareSize) / 2;
+
+    // Dessiner la partie centrale de l'image source
+    ctx.drawImage(
+      sourceCanvas,
+      offsetX, offsetY, squareSize, squareSize,  // source
+      0, 0, squareSize, squareSize               // destination
+    );
+
+    // Télécharger l'image carrée
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().slice(0, 10);
     link.download = `${title.toLowerCase().replace(/\s+/g, '_')}_${dateStr}.jpg`;
-    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.href = squareCanvas.toDataURL('image/jpeg', 0.95);
     link.click();
   }).catch(err => {
     overlay.remove();

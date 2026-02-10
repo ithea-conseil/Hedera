@@ -204,7 +204,10 @@
   <!-- === VUE : ANNUAIRE (existant) === -->
   <section id="view-annuaire" class="view active" aria-label="Section Annuaire">
     <div id="app">
-      <div id="map" aria-label="Carte des collaborateurs"></div>
+      <div id="map" aria-label="Carte des collaborateurs">
+        <!-- DROM inset maps -->
+        <div class="drom-container" id="dromContainer"></div>
+      </div>
 
       <aside id="panel" aria-label="Panneau latéral des filtres et résultats">
         <button id="panelToggle" aria-expanded="true" aria-controls="panel" title="Afficher/Masquer le panneau">⟩</button>
@@ -244,7 +247,10 @@
   <!-- === VUE : RÉFÉRENCES (nouvelle carte + panneau dédié) === -->
   <section id="view-references" class="view" aria-label="Section Références">
     <div id="refApp">
-      <div id="refMap" aria-label="Carte des références"></div>
+      <div id="refMap" aria-label="Carte des références">
+        <!-- DROM inset maps -->
+        <div class="drom-container" id="refDromContainer"></div>
+      </div>
 
       <aside id="refPanel" aria-label="Panneau des références">
         <button id="refPanelToggle" aria-expanded="true" aria-controls="refPanel" title="Afficher/Masquer le panneau">⟩</button>
@@ -298,6 +304,9 @@
       <header class="panel-header">
         <div class="brand">
           <h1>Veille concurrentielle</h1>
+        </div>
+        <div class="export-buttons">
+          <button id="veilleExportJPG" class="export-btn" title="Exporter la carte en JPG">Export JPG</button>
         </div>
       </header>
 

@@ -45,6 +45,50 @@ body{
 }
 .leaflet-tile-pane { filter: opacity(40%) grayscale(100%); }
 
+/* DROM inset maps */
+.drom-container {
+  position: absolute;
+  left: 10px;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 500;
+  pointer-events: none;
+}
+
+.drom-inset {
+  width: 120px;
+  height: 90px;
+  background: rgba(12, 15, 14, 0.85);
+  border: 2px solid rgba(255,255,255,.3);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.drom-inset .drom-map {
+  width: 100%;
+  height: 100%;
+}
+
+.drom-label {
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  right: 0;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  text-align: center;
+  padding: 2px 4px;
+  z-index: 1000;
+  pointer-events: none;
+}
+
 /* Panneau latéral commun (Annuaire, Références, Veille) */
 #panel, #refPanel, #veillePanel{
   position:absolute; top:0; right:0; bottom:0; width:var(--panel-width);
