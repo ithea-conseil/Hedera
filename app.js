@@ -740,7 +740,7 @@ async function annuaireExportJpg() {
   await exportMapAsJpg(map, "annuaire", activeCompanies, companyColors, "map");
 }
 
-/* Fonction générique d'export JPG avec support DROM */
+/* Fonction générique d'export JPG */
 async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors, mapElementId) {
   try {
     if (!window.domtoimage) {
@@ -762,13 +762,10 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     loadingMsg.style.zIndex = '10000';
     document.body.appendChild(loadingMsg);
 
-    // Dimensions du canvas final
-    const finalWidth = 2400;
-    const finalHeight = 2000;
-    const legendHeight = 250;
-    const dromWidth = 300;
-    const dromBoxHeight = 240;
-    const mapHeight = finalHeight - legendHeight;
+    // Dimensions du canvas final (2000x2000 carré)
+    const finalSize = 2000;
+    const legendHeight = 200;
+    const mapHeight = finalSize - legendHeight;
 
     // Capturer la carte principale avec dom-to-image
     const mapElement = document.getElementById(mapElementId);
@@ -791,119 +788,65 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Créer le canvas final
     const finalCanvas = document.createElement('canvas');
-    finalCanvas.width = finalWidth;
-    finalCanvas.height = finalHeight;
+    finalCanvas.width = finalSize;
+    finalCanvas.height = finalSize;
     const ctx = finalCanvas.getContext('2d');
 
     // Fond blanc
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, finalWidth, finalHeight);
+    ctx.fillRect(0, 0, finalSize, finalSize);
 
-    // Dessiner la carte principale (à droite des DROM)
-    const mapX = dromWidth + 20;
-    const mapWidth = finalWidth - mapX;
-    ctx.drawImage(mapImage, mapX, 0, mapWidth, mapHeight);
+    // Calculer les dimensions pour dessiner la carte sans déformation
+    const sourceAspect = mapImage.width / mapImage.height;
+    const targetAspect = finalSize / mapHeight;
 
-    // Collecter les données DROM depuis la carte
-    const dromRegions = [
-      { name: "Guadeloupe", coords: [16.265, -61.551] },
-      { name: "Martinique", coords: [14.641, -61.024] },
-      { name: "Guyane", coords: [3.933, -53.125] },
-      { name: "La Réunion", coords: [-21.115, 55.536] },
-      { name: "Mayotte", coords: [-12.827, 45.166] }
-    ];
+    let drawWidth, drawHeight, offsetX, offsetY;
 
-    // Dessiner les carrés DROM à gauche
-    let dromY = 50;
-    const dromSpacing = 20;
+    if (sourceAspect > targetAspect) {
+      // L'image source est plus large
+      drawWidth = finalSize;
+      drawHeight = finalSize / sourceAspect;
+      offsetX = 0;
+      offsetY = (mapHeight - drawHeight) / 2;
+    } else {
+      // L'image source est plus haute
+      drawHeight = mapHeight;
+      drawWidth = mapHeight * sourceAspect;
+      offsetX = (finalSize - drawWidth) / 2;
+      offsetY = 0;
+    }
 
-    dromRegions.forEach((drom, index) => {
-      // Fond du carré DROM
-      ctx.fillStyle = '#f5f5f5';
-      ctx.fillRect(10, dromY, dromWidth - 20, dromBoxHeight);
-
-      // Bordure
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(10, dromY, dromWidth - 20, dromBoxHeight);
-
-      // Zone du nom
-      const labelHeight = 35;
-      ctx.fillStyle = '#e0e0e0';
-      ctx.fillRect(10, dromY + dromBoxHeight - labelHeight, dromWidth - 20, labelHeight);
-
-      // Ligne de séparation
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(10, dromY + dromBoxHeight - labelHeight);
-      ctx.lineTo(dromWidth - 10, dromY + dromBoxHeight - labelHeight);
-      ctx.stroke();
-
-      // Texte du nom
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 16px Arial';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(drom.name, dromWidth / 2, dromY + dromBoxHeight - labelHeight / 2);
-
-      // Compter et dessiner les marqueurs DROM
-      let markerCount = 0;
-      mapInstance.eachLayer(layer => {
-        if (layer instanceof L.Marker) {
-          const latLng = layer.getLatLng();
-          const latDiff = Math.abs(latLng.lat - drom.coords[0]);
-          const lngDiff = Math.abs(latLng.lng - drom.coords[1]);
-
-          if (latDiff < 2 && lngDiff < 2) {
-            markerCount++;
-          }
-        }
-      });
-
-      // Afficher le nombre de marqueurs
-      if (markerCount > 0) {
-        ctx.fillStyle = '#666';
-        ctx.font = '14px Arial';
-        ctx.fillText(`${markerCount} point${markerCount > 1 ? 's' : ''}`,
-                     dromWidth / 2, dromY + (dromBoxHeight - labelHeight) / 2);
-      } else {
-        ctx.fillStyle = '#999';
-        ctx.font = '12px Arial';
-        ctx.fillText('Aucun point', dromWidth / 2, dromY + (dromBoxHeight - labelHeight) / 2);
-      }
-
-      dromY += dromBoxHeight + dromSpacing;
-    });
+    // Dessiner la carte principale (centrée, sans déformation)
+    ctx.drawImage(mapImage, offsetX, offsetY, drawWidth, drawHeight);
 
     // Dessiner la légende en bas
     const legendY = mapHeight;
 
     // Fond de la légende
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, legendY, finalWidth, legendHeight);
+    ctx.fillRect(0, legendY, finalSize, legendHeight);
 
     // Bordure supérieure de la légende
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.moveTo(0, legendY);
-    ctx.lineTo(finalWidth, legendY);
+    ctx.lineTo(finalSize, legendY);
     ctx.stroke();
 
     // Titre de la légende
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 28px Arial';
+    ctx.font = 'bold 32px Arial';
     ctx.textAlign = 'center';
     const titleText = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-    ctx.fillText(titleText, finalWidth / 2, legendY + 40);
+    ctx.fillText(titleText, finalSize / 2, legendY + 45);
 
     // Dessiner les éléments de la légende
     const entitiesArray = Array.from(activeEntities);
-    const itemsPerRow = 3;
-    const itemWidth = finalWidth / itemsPerRow;
-    const startY = legendY + 80;
-    const rowHeight = 35;
+    const itemsPerRow = 4;
+    const itemWidth = finalSize / itemsPerRow;
+    const startY = legendY + 90;
+    const rowHeight = 40;
 
     entitiesArray.forEach((entityName, index) => {
       const col = index % itemsPerRow;
@@ -915,7 +858,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
       const color = entityColors.get(entityName) || "#2ea76b";
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x - 80, y, 10, 0, Math.PI * 2);
+      ctx.arc(x - 100, y, 12, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = '#333';
       ctx.lineWidth = 2;
@@ -926,7 +869,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
       ctx.font = '16px Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(entityName, x - 65, y);
+      ctx.fillText(entityName, x - 82, y);
     });
 
     // Supprimer le message de chargement
