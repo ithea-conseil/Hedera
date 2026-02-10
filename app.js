@@ -743,180 +743,186 @@ async function annuaireExportJpg() {
 /* Fonction générique d'export JPG avec support DROM */
 async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors) {
   try {
-    // Créer un conteneur temporaire pour l'export
-    const exportContainer = document.createElement("div");
-    exportContainer.style.position = "fixed";
-    exportContainer.style.top = "-10000px";
-    exportContainer.style.left = "-10000px";
-    exportContainer.style.width = "2000px";
-    exportContainer.style.height = "2000px";
-    exportContainer.style.backgroundColor = "#fff";
-    document.body.appendChild(exportContainer);
+    if (!window.leafletImage) {
+      alert("Bibliothèque leaflet-image absente");
+      return;
+    }
 
-    // Créer le conteneur de la carte principale
-    const mapContainer = document.createElement("div");
-    mapContainer.style.width = "2000px";
-    mapContainer.style.height = "1700px";
-    mapContainer.style.position = "relative";
-    exportContainer.appendChild(mapContainer);
+    // Message de chargement
+    const loadingMsg = document.createElement('div');
+    loadingMsg.textContent = 'Génération de l\'export en cours...';
+    loadingMsg.style.position = 'fixed';
+    loadingMsg.style.top = '50%';
+    loadingMsg.style.left = '50%';
+    loadingMsg.style.transform = 'translate(-50%, -50%)';
+    loadingMsg.style.padding = '20px';
+    loadingMsg.style.backgroundColor = '#000';
+    loadingMsg.style.color = '#fff';
+    loadingMsg.style.borderRadius = '8px';
+    loadingMsg.style.zIndex = '10000';
+    document.body.appendChild(loadingMsg);
 
-    // Créer une nouvelle instance de carte pour l'export
-    const exportMap = L.map(mapContainer, {
-      zoomControl: false,
-      attributionControl: false
-    }).setView([46.603354, 1.888334], 6);
+    // Dimensions du canvas final
+    const finalWidth = 2400;
+    const finalHeight = 2000;
+    const legendHeight = 250;
+    const dromWidth = 300;
+    const dromBoxHeight = 240;
+    const mapHeight = finalHeight - legendHeight;
 
-    // Ajouter les tuiles
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(exportMap);
-
-    // Attendre que les tuiles se chargent
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Ajouter les marqueurs visibles
-    const visibleMarkers = [];
-    mapInstance.eachLayer(layer => {
-      if (layer instanceof L.Marker) {
-        const markerLatLng = layer.getLatLng();
-        const icon = layer.options.icon;
-        const newMarker = L.marker(markerLatLng, { icon: icon }).addTo(exportMap);
-        visibleMarkers.push(newMarker);
-      }
+    // Capturer la carte principale avec leaflet-image
+    const mapCanvas = await new Promise((resolve, reject) => {
+      leafletImage(mapInstance, (err, canvas) => {
+        if (err) reject(err);
+        else resolve(canvas);
+      });
     });
 
-    // Créer les cartes DROM
-    const dromContainer = document.createElement("div");
-    dromContainer.style.position = "absolute";
-    dromContainer.style.left = "10px";
-    dromContainer.style.top = "300px";
-    dromContainer.style.display = "flex";
-    dromContainer.style.flexDirection = "column";
-    dromContainer.style.gap = "10px";
-    exportContainer.appendChild(dromContainer);
+    // Créer le canvas final
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = finalWidth;
+    finalCanvas.height = finalHeight;
+    const ctx = finalCanvas.getContext('2d');
 
+    // Fond blanc
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, finalWidth, finalHeight);
+
+    // Dessiner la carte principale (à droite des DROM)
+    const mapX = dromWidth + 20;
+    const mapWidth = finalWidth - mapX;
+    ctx.drawImage(mapCanvas, mapX, 0, mapWidth, mapHeight);
+
+    // Collecter les données DROM depuis la carte
     const dromRegions = [
-      { name: "Guadeloupe", coords: [16.265, -61.551], zoom: 9 },
-      { name: "Martinique", coords: [14.641, -61.024], zoom: 9 },
-      { name: "Guyane", coords: [3.933, -53.125], zoom: 7 },
-      { name: "La Réunion", coords: [-21.115, 55.536], zoom: 9 },
-      { name: "Mayotte", coords: [-12.827, 45.166], zoom: 10 }
+      { name: "Guadeloupe", coords: [16.265, -61.551] },
+      { name: "Martinique", coords: [14.641, -61.024] },
+      { name: "Guyane", coords: [3.933, -53.125] },
+      { name: "La Réunion", coords: [-21.115, 55.536] },
+      { name: "Mayotte", coords: [-12.827, 45.166] }
     ];
 
-    for (const drom of dromRegions) {
-      const dromBox = document.createElement("div");
-      dromBox.style.width = "250px";
-      dromBox.style.height = "250px";
-      dromBox.style.backgroundColor = "#fff";
-      dromBox.style.border = "2px solid #333";
-      dromBox.style.borderRadius = "8px";
-      dromBox.style.overflow = "hidden";
-      dromContainer.appendChild(dromBox);
+    // Dessiner les carrés DROM à gauche
+    let dromY = 50;
+    const dromSpacing = 20;
 
-      const dromMapDiv = document.createElement("div");
-      dromMapDiv.style.width = "250px";
-      dromMapDiv.style.height = "220px";
-      dromBox.appendChild(dromMapDiv);
+    dromRegions.forEach((drom, index) => {
+      // Fond du carré DROM
+      ctx.fillStyle = '#f5f5f5';
+      ctx.fillRect(10, dromY, dromWidth - 20, dromBoxHeight);
 
-      const dromLabel = document.createElement("div");
-      dromLabel.textContent = drom.name;
-      dromLabel.style.height = "30px";
-      dromLabel.style.display = "flex";
-      dromLabel.style.alignItems = "center";
-      dromLabel.style.justifyContent = "center";
-      dromLabel.style.fontWeight = "bold";
-      dromLabel.style.fontSize = "12px";
-      dromLabel.style.backgroundColor = "#f0f0f0";
-      dromLabel.style.borderTop = "1px solid #333";
-      dromBox.appendChild(dromLabel);
+      // Bordure
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(10, dromY, dromWidth - 20, dromBoxHeight);
 
-      const dromMap = L.map(dromMapDiv, {
-        zoomControl: false,
-        attributionControl: false
-      }).setView(drom.coords, drom.zoom);
+      // Zone du nom
+      const labelHeight = 35;
+      ctx.fillStyle = '#e0e0e0';
+      ctx.fillRect(10, dromY + dromBoxHeight - labelHeight, dromWidth - 20, labelHeight);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dromMap);
+      // Ligne de séparation
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(10, dromY + dromBoxHeight - labelHeight);
+      ctx.lineTo(dromWidth - 10, dromY + dromBoxHeight - labelHeight);
+      ctx.stroke();
 
-      // Ajouter les marqueurs pour cette région DROM si applicable
+      // Texte du nom
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 16px Arial';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(drom.name, dromWidth / 2, dromY + dromBoxHeight - labelHeight / 2);
+
+      // Compter et dessiner les marqueurs DROM
+      let markerCount = 0;
       mapInstance.eachLayer(layer => {
         if (layer instanceof L.Marker) {
-          const markerLatLng = layer.getLatLng();
-          const lat = markerLatLng.lat;
-          const lng = markerLatLng.lng;
-
-          // Vérifier si le marqueur est dans cette région DROM
-          const latDiff = Math.abs(lat - drom.coords[0]);
-          const lngDiff = Math.abs(lng - drom.coords[1]);
+          const latLng = layer.getLatLng();
+          const latDiff = Math.abs(latLng.lat - drom.coords[0]);
+          const lngDiff = Math.abs(latLng.lng - drom.coords[1]);
 
           if (latDiff < 2 && lngDiff < 2) {
-            const icon = layer.options.icon;
-            L.marker(markerLatLng, { icon: icon }).addTo(dromMap);
+            markerCount++;
           }
         }
       });
-    }
 
-    // Créer la légende
-    const legend = document.createElement("div");
-    legend.style.position = "absolute";
-    legend.style.bottom = "0";
-    legend.style.left = "0";
-    legend.style.right = "0";
-    legend.style.height = "300px";
-    legend.style.backgroundColor = "#fff";
-    legend.style.padding = "20px";
-    legend.style.borderTop = "3px solid #333";
-    exportContainer.appendChild(legend);
+      // Afficher le nombre de marqueurs
+      if (markerCount > 0) {
+        ctx.fillStyle = '#666';
+        ctx.font = '14px Arial';
+        ctx.fillText(`${markerCount} point${markerCount > 1 ? 's' : ''}`,
+                     dromWidth / 2, dromY + (dromBoxHeight - labelHeight) / 2);
+      } else {
+        ctx.fillStyle = '#999';
+        ctx.font = '12px Arial';
+        ctx.fillText('Aucun point', dromWidth / 2, dromY + (dromBoxHeight - labelHeight) / 2);
+      }
 
-    const title = document.createElement("h2");
-    title.textContent = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-    title.style.margin = "0 0 20px 0";
-    title.style.fontSize = "24px";
-    title.style.textAlign = "center";
-    legend.appendChild(title);
-
-    const legendItems = document.createElement("div");
-    legendItems.style.display = "grid";
-    legendItems.style.gridTemplateColumns = "repeat(3, 1fr)";
-    legendItems.style.gap = "15px";
-    legend.appendChild(legendItems);
-
-    activeEntities.forEach(entityName => {
-      const item = document.createElement("div");
-      item.style.display = "flex";
-      item.style.alignItems = "center";
-      item.style.gap = "10px";
-
-      const colorBox = document.createElement("div");
-      colorBox.style.width = "20px";
-      colorBox.style.height = "20px";
-      colorBox.style.borderRadius = "50%";
-      colorBox.style.backgroundColor = entityColors.get(entityName) || "#2ea76b";
-      colorBox.style.border = "2px solid #333";
-      item.appendChild(colorBox);
-
-      const label = document.createElement("span");
-      label.textContent = entityName;
-      label.style.fontSize = "14px";
-      label.style.color = "#000";
-      item.appendChild(label);
-
-      legendItems.appendChild(item);
+      dromY += dromBoxHeight + dromSpacing;
     });
 
-    // Attendre un peu plus pour que tout se charge
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // Dessiner la légende en bas
+    const legendY = mapHeight;
 
-    // Capturer avec html2canvas
-    const canvas = await html2canvas(exportContainer, {
-      backgroundColor: '#ffffff',
-      scale: 1,
-      logging: false
+    // Fond de la légende
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, legendY, finalWidth, legendHeight);
+
+    // Bordure supérieure de la légende
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, legendY);
+    ctx.lineTo(finalWidth, legendY);
+    ctx.stroke();
+
+    // Titre de la légende
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 28px Arial';
+    ctx.textAlign = 'center';
+    const titleText = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+    ctx.fillText(titleText, finalWidth / 2, legendY + 40);
+
+    // Dessiner les éléments de la légende
+    const entitiesArray = Array.from(activeEntities);
+    const itemsPerRow = 3;
+    const itemWidth = finalWidth / itemsPerRow;
+    const startY = legendY + 80;
+    const rowHeight = 35;
+
+    entitiesArray.forEach((entityName, index) => {
+      const col = index % itemsPerRow;
+      const row = Math.floor(index / itemsPerRow);
+      const x = col * itemWidth + itemWidth / 2;
+      const y = startY + row * rowHeight;
+
+      // Cercle de couleur
+      const color = entityColors.get(entityName) || "#2ea76b";
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x - 80, y, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Texte de l'entité
+      ctx.fillStyle = '#000';
+      ctx.font = '16px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(entityName, x - 65, y);
     });
 
-    // Nettoyer
-    document.body.removeChild(exportContainer);
+    // Supprimer le message de chargement
+    document.body.removeChild(loadingMsg);
 
     // Télécharger
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().slice(0, 10);
     link.download = `${sectionName}_${dateStr}.jpg`;
@@ -925,7 +931,10 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
   } catch (error) {
     console.error("Erreur lors de l'export JPG:", error);
-    alert("Erreur lors de l'export JPG. Consultez la console pour plus de détails.");
+    alert("Erreur lors de l'export JPG: " + error.message);
+    // Supprimer le message de chargement si présent
+    const loadingMsg = document.querySelector('div[style*="Génération"]');
+    if (loadingMsg) document.body.removeChild(loadingMsg);
   }
 }
 
