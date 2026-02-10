@@ -783,11 +783,12 @@ function exportMapJPG(mapId, title) {
 
     const dot = document.createElement("div");
     dot.style.cssText = `
-      width: 12px;
-      height: 12px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: ${color};
-      border: 2px solid rgba(0,0,0,0.2);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
+      flex-shrink: 0;
     `;
 
     const label = document.createElement("span");
@@ -812,15 +813,34 @@ function exportMapJPG(mapId, title) {
     allowTaint: true,
     backgroundColor: '#0c0f0e',
     scale: 2
-  }).then(canvas => {
+  }).then(sourceCanvas => {
     // Supprimer l'overlay
     overlay.remove();
 
-    // Télécharger l'image
+    // Créer un canvas carré en prenant le minimum des dimensions
+    const squareSize = Math.min(sourceCanvas.width, sourceCanvas.height);
+    const squareCanvas = document.createElement('canvas');
+    squareCanvas.width = squareSize;
+    squareCanvas.height = squareSize;
+
+    const ctx = squareCanvas.getContext('2d');
+
+    // Calculer les offsets pour centrer l'image
+    const offsetX = (sourceCanvas.width - squareSize) / 2;
+    const offsetY = (sourceCanvas.height - squareSize) / 2;
+
+    // Dessiner la partie centrale de l'image source
+    ctx.drawImage(
+      sourceCanvas,
+      offsetX, offsetY, squareSize, squareSize,  // source
+      0, 0, squareSize, squareSize               // destination
+    );
+
+    // Télécharger l'image carrée
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().slice(0, 10);
     link.download = `${title.toLowerCase().replace(/\s+/g, '_')}_${dateStr}.jpg`;
-    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.href = squareCanvas.toDataURL('image/jpeg', 0.95);
     link.click();
   }).catch(err => {
     overlay.remove();

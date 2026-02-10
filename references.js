@@ -169,33 +169,41 @@ async function loadReferences() {
   const dataRows = rows.slice(5);
   console.log("[Références] Nombre de lignes de données :", dataRows.length);
 
+  const pick = (obj, names) => {
+    for (const n of names) {
+      if (n in obj) return obj[n];
+    }
+    return "";
+  };
+
   const items = dataRows.map((row, idx) => {
     const obj = {};
     headers.forEach((h, i) => { obj[h] = row[i] || ""; });
-    
+
     const lat = refParseNumber(obj["lat"]);
     const lon = refParseNumber(obj["lon"]);
-    
+
     const item = {
-      entite: obj["Entité"] || "",
-      intitule: obj["Intitulé mission"] || "",
-      territoire: obj["Territoire"] || "",
-      annee: obj["Année"] || "",
-      cheffe: obj["Cheffe de projet"] || "",
-      titreReferent: obj["Titre référent"] || "",
-      nomReferent: obj["Nom référent"] || "",
-      mail: obj["Mail"] || "",
-      tel: obj["Tél"] || "",
-      montant: refParseNumber(obj["Montant"]),
+      entite: pick(obj, ["Entité", "Entite"]),
+      intitule: pick(obj, ["Intitulé mission", "Intitule mission"]),
+      territoire: pick(obj, ["Territoire"]),
+      annee: pick(obj, ["Année", "Annee"]),
+      cheffe: pick(obj, ["Cheffe de projet", "Chef de projet"]),
+      titreReferent: pick(obj, ["Titre référent", "Titre referent", "Fonction référent", "Fonction referent"]),
+      nomReferent: pick(obj, ["Nom référent", "Nom referent", "Prénom Nom référent", "Prenom Nom referent"]),
+      mail: pick(obj, ["Mail", "Email", "Adresse mail"]),
+      tel: pick(obj, ["Tél", "Tel", "Téléphone", "Telephone"]),
+      montant: refParseNumber(pick(obj, ["Montant"])),
       lat: lat,
       lon: lon
     };
-    
+
     // Debug première ligne
     if (idx === 0) {
       console.log("[Références] Exemple première ligne:", item);
+      console.log("[Références] Headers disponibles:", headers);
     }
-    
+
     return item;
   });
 
@@ -584,11 +592,12 @@ function refExportJPG() {
 
     const dot = document.createElement("div");
     dot.style.cssText = `
-      width: 12px;
-      height: 12px;
+      width: 18px;
+      height: 18px;
       border-radius: 50%;
       background: ${color};
-      border: 2px solid rgba(0,0,0,0.2);
+      box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
+      flex-shrink: 0;
     `;
 
     const label = document.createElement("span");
@@ -613,15 +622,34 @@ function refExportJPG() {
     allowTaint: true,
     backgroundColor: '#0c0f0e',
     scale: 2
-  }).then(canvas => {
+  }).then(sourceCanvas => {
     // Supprimer l'overlay
     overlay.remove();
 
-    // Télécharger l'image
+    // Créer un canvas carré en prenant le minimum des dimensions
+    const squareSize = Math.min(sourceCanvas.width, sourceCanvas.height);
+    const squareCanvas = document.createElement('canvas');
+    squareCanvas.width = squareSize;
+    squareCanvas.height = squareSize;
+
+    const ctx = squareCanvas.getContext('2d');
+
+    // Calculer les offsets pour centrer l'image
+    const offsetX = (sourceCanvas.width - squareSize) / 2;
+    const offsetY = (sourceCanvas.height - squareSize) / 2;
+
+    // Dessiner la partie centrale de l'image source
+    ctx.drawImage(
+      sourceCanvas,
+      offsetX, offsetY, squareSize, squareSize,  // source
+      0, 0, squareSize, squareSize               // destination
+    );
+
+    // Télécharger l'image carrée
     const link = document.createElement('a');
     const dateStr = new Date().toISOString().slice(0, 10);
     link.download = `references_${dateStr}.jpg`;
-    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.href = squareCanvas.toDataURL('image/jpeg', 0.95);
     link.click();
   }).catch(err => {
     overlay.remove();
