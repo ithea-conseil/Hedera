@@ -100,7 +100,7 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize){
   const zoom = map.getZoom();
   // Amplitude du jitter en px (augmentée pour mieux séparer les marqueurs)
   // Formule: plus on est dézoomé, plus l'écartement est grand
-  const basePx = Math.max(15, Math.min(35, 50 - zoom * 3));
+  const basePx = Math.max(0, Math.min(18, (14 + zoom) * 2 + 4))
   if (groupSize <= 1 || basePx === 0) return baseLatLng;
 
   // Trouver l’anneau et la position dans l’anneau (6, 12, 18, ...)
@@ -773,7 +773,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Dimensions du canvas final (2000x2000 carré)
     const finalSize = 2000;
-    const legendHeight = 300;
+    const legendHeight = 400;
     const mapHeight = finalSize - legendHeight;
 
     // Cacher temporairement les contrôles de zoom
@@ -874,7 +874,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
         const radius = 15;
         const dotGap = 12;
 
-        ctx.font = '24px Arial'; // Police légèrement réduite
+        ctx.font = '40px Arial'; // Police légèrement réduite
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
 
