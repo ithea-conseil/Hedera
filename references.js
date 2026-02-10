@@ -512,6 +512,124 @@ function refExportExcel() {
 
 
 
+/* Export JPG for References */
+function refExportJPG() {
+  if (!window.html2canvas) {
+    alert("Bibliothèque html2canvas absente");
+    return;
+  }
+
+  const mapElement = document.getElementById("refMap");
+  if (!mapElement) {
+    alert("Carte non trouvée");
+    return;
+  }
+
+  // Créer un overlay avec titre et légende
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 9999;
+  `;
+
+  // Titre en haut
+  const titleDiv = document.createElement("div");
+  titleDiv.style.cssText = `
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 18px;
+    font-weight: bold;
+    color: #0c0f0e;
+  `;
+  titleDiv.textContent = "Références";
+  overlay.appendChild(titleDiv);
+
+  // Légende en bas
+  const legendDiv = document.createElement("div");
+  legendDiv.style.cssText = `
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    max-width: 90%;
+  `;
+
+  // Ajouter les entités actives avec leurs couleurs
+  refActiveCompanies.forEach(company => {
+    const color = refCompanyColors.get(company) || '#2ea76b';
+    const item = document.createElement("div");
+    item.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    `;
+
+    const dot = document.createElement("div");
+    dot.style.cssText = `
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: ${color};
+      border: 2px solid rgba(0,0,0,0.2);
+    `;
+
+    const label = document.createElement("span");
+    label.style.cssText = `
+      font-size: 12px;
+      color: #0c0f0e;
+      font-weight: 500;
+    `;
+    label.textContent = company;
+
+    item.appendChild(dot);
+    item.appendChild(label);
+    legendDiv.appendChild(item);
+  });
+
+  overlay.appendChild(legendDiv);
+  mapElement.appendChild(overlay);
+
+  // Capturer la carte avec overlay
+  html2canvas(mapElement, {
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: '#0c0f0e',
+    scale: 2
+  }).then(canvas => {
+    // Supprimer l'overlay
+    overlay.remove();
+
+    // Télécharger l'image
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.download = `references_${dateStr}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+  }).catch(err => {
+    overlay.remove();
+    console.error("Erreur lors de l'export JPG:", err);
+    alert("Erreur lors de l'export de la carte");
+  });
+}
+
 /* Bootstrap References module */
 async function initReferences() {
   try {
@@ -552,14 +670,7 @@ async function initReferences() {
       });
     }
 
-    // 5. Add export button
-    const exportBtn = document.createElement("button");
-    exportBtn.className = "soft";
-    exportBtn.textContent = "Exporter Excel";
-    exportBtn.addEventListener("click", refExportExcel);
-    document.querySelector("#refPanel .filters-head").appendChild(exportBtn);
-    
-    // 6. Setup toggle button
+    // 5. Setup toggle button
     const toggleBtn = document.getElementById("refPanelToggle");
     if (toggleBtn) {
       toggleBtn.addEventListener("click", () => {
@@ -567,6 +678,12 @@ async function initReferences() {
         toggleBtn.textContent = collapsed ? "⟨" : "⟩";
       });
     }
+
+    // 6. Setup export buttons in header
+    const excelBtn = document.getElementById("refExportExcel");
+    const jpgBtn = document.getElementById("refExportJPG");
+    if (excelBtn) excelBtn.addEventListener("click", refExportExcel);
+    if (jpgBtn) jpgBtn.addEventListener("click", refExportJPG);
 
     console.log("[Références] Initialisation terminée avec succès");
   } catch (e) {
