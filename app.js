@@ -767,8 +767,22 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     const legendHeight = 220;
     const mapHeight = finalSize - legendHeight;
 
-    // Capturer la carte principale avec dom-to-image
+    // Titres professionnels selon la section
+    const professionalTitles = {
+      'annuaire': 'Cartographie des Collaborateurs',
+      'references': 'Cartographie des Références',
+      'veille': 'Cartographie de la Veille Concurrentielle'
+    };
+    const displayTitle = professionalTitles[sectionName] || sectionName;
+
+    // Cacher temporairement les contrôles de zoom
     const mapElement = document.getElementById(mapElementId);
+    const zoomControl = mapElement.querySelector('.leaflet-control-zoom');
+    const wasHidden = zoomControl && zoomControl.style.display === 'none';
+    if (zoomControl && !wasHidden) {
+      zoomControl.style.display = 'none';
+    }
+
     const mapDataUrl = await domtoimage.toPng(mapElement, {
       width: mapElement.offsetWidth,
       height: mapElement.offsetHeight,
@@ -777,6 +791,11 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
         transformOrigin: 'top left'
       }
     });
+
+    // Réafficher les contrôles de zoom
+    if (zoomControl && !wasHidden) {
+      zoomControl.style.display = '';
+    }
 
     // Créer une image depuis le dataURL
     const mapImage = new Image();
@@ -826,12 +845,11 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, legendY, finalSize, legendHeight);
 
-    // Titre de la légende
+    // Titre de la légende (aligné à gauche)
     ctx.fillStyle = '#000';
     ctx.font = 'bold 36px Arial';
-    ctx.textAlign = 'center';
-    const titleText = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-    ctx.fillText(titleText, finalSize / 2, legendY + 50);
+    ctx.textAlign = 'left';
+    ctx.fillText(displayTitle, 40, legendY + 50);
 
     // Dessiner les éléments de la légende
     const entitiesArray = Array.from(activeEntities);
@@ -874,10 +892,10 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
       // Texte de l'entité
       ctx.fillStyle = '#000';
-      ctx.font = '18px Arial';
+      ctx.font = '22px Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(entityName, centerX + radius + 8, centerY);
+      ctx.fillText(entityName, centerX + radius + 10, centerY);
     });
 
     // Supprimer le message de chargement
