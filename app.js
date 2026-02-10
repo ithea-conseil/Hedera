@@ -764,7 +764,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Dimensions du canvas final (2000x2000 carré)
     const finalSize = 2000;
-    const legendHeight = 200;
+    const legendHeight = 220;
     const mapHeight = finalSize - legendHeight;
 
     // Capturer la carte principale avec dom-to-image
@@ -796,57 +796,49 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, finalSize, finalSize);
 
-    // Calculer les dimensions pour dessiner la carte sans déformation
+    // Crop la carte pour remplir toute la zone (plein écran)
     const sourceAspect = mapImage.width / mapImage.height;
     const targetAspect = finalSize / mapHeight;
 
-    let drawWidth, drawHeight, offsetX, offsetY;
+    let srcX, srcY, srcWidth, srcHeight;
 
     if (sourceAspect > targetAspect) {
-      // L'image source est plus large
-      drawWidth = finalSize;
-      drawHeight = finalSize / sourceAspect;
-      offsetX = 0;
-      offsetY = (mapHeight - drawHeight) / 2;
+      // L'image source est plus large : on crop les côtés
+      srcHeight = mapImage.height;
+      srcWidth = mapImage.height * targetAspect;
+      srcX = (mapImage.width - srcWidth) / 2;
+      srcY = 0;
     } else {
-      // L'image source est plus haute
-      drawHeight = mapHeight;
-      drawWidth = mapHeight * sourceAspect;
-      offsetX = (finalSize - drawWidth) / 2;
-      offsetY = 0;
+      // L'image source est plus haute : on crop le haut/bas
+      srcWidth = mapImage.width;
+      srcHeight = mapImage.width / targetAspect;
+      srcX = 0;
+      srcY = (mapImage.height - srcHeight) / 2;
     }
 
-    // Dessiner la carte principale (centrée, sans déformation)
-    ctx.drawImage(mapImage, offsetX, offsetY, drawWidth, drawHeight);
+    // Dessiner la carte principale (crop et plein écran)
+    ctx.drawImage(mapImage, srcX, srcY, srcWidth, srcHeight, 0, 0, finalSize, mapHeight);
 
     // Dessiner la légende en bas
     const legendY = mapHeight;
 
-    // Fond de la légende
+    // Fond de la légende (blanc)
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, legendY, finalSize, legendHeight);
 
-    // Bordure supérieure de la légende
-    ctx.strokeStyle = '#333';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, legendY);
-    ctx.lineTo(finalSize, legendY);
-    ctx.stroke();
-
     // Titre de la légende
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 32px Arial';
+    ctx.font = 'bold 36px Arial';
     ctx.textAlign = 'center';
     const titleText = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
-    ctx.fillText(titleText, finalSize / 2, legendY + 45);
+    ctx.fillText(titleText, finalSize / 2, legendY + 50);
 
     // Dessiner les éléments de la légende
     const entitiesArray = Array.from(activeEntities);
     const itemsPerRow = 4;
     const itemWidth = finalSize / itemsPerRow;
-    const startY = legendY + 90;
-    const rowHeight = 40;
+    const startY = legendY + 110;
+    const rowHeight = 45;
 
     entitiesArray.forEach((entityName, index) => {
       const col = index % itemsPerRow;
@@ -854,15 +846,50 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
       const x = col * itemWidth + itemWidth / 2;
       const y = startY + row * rowHeight;
 
-      // Cercle de couleur
+      // Dessiner le point exactement comme sur la carte
       const color = entityColors.get(entityName) || "#2ea76b";
+      const centerX = x - 110;
+      const centerY = y;
+      const radius = 11; // 22px de diamètre comme sur la carte
+
+      // Cercle de couleur
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x - 100, y, 12, 0, Math.PI * 2);
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#333';
+
+      // Bordure blanche intérieure (simule le box-shadow inset)
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
       ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
       ctx.stroke();
+
+      // Bordure noire extérieure (simule le box-shadow externe)
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Texte de l'entité
+      ctx.fillStyle = '#000';
+      ctx.font = '18px Arial';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(entityName, centerX + radius + 8, centerY);
+    });
+
+    // Supprimer le message de chargement
+    document.body.removeChild(loadingMsg);
+
+    // Télécharger
+    const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.download = `${sectionName}_${dateStr}.jpg`;
+    link.href = dataUrl;
+    link.click();
 
       // Texte de l'entité
       ctx.fillStyle = '#000';
