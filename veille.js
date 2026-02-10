@@ -385,8 +385,39 @@ function exportExcel(){
   XLSX.writeFile(wb, fname);
 }
 
+/* Export JPG pour Veille */
+async function veilleExportJpg() {
+  if (!window.html2canvas) {
+    alert("Bibliothèque html2canvas absente");
+    return;
+  }
 
-/* ---- Flux “Rechercher” ---- */
+  // Pour la veille, on utilise les entités visibles dans les résultats
+  const veilleActiveEntities = new Set();
+  const veilleEntityColors = new Map();
+
+  currentRows.forEach(row => {
+    if (row.titulaire_nom) {
+      veilleActiveEntities.add(row.titulaire_nom);
+      // Générer une couleur unique pour chaque titulaire
+      if (!veilleEntityColors.has(row.titulaire_nom)) {
+        const colors = ["#1DB5C5","#70BA7A","#EE2528","#F38331","#5C368D","#F9B832","#2ea76b"];
+        const index = veilleEntityColors.size % colors.length;
+        veilleEntityColors.set(row.titulaire_nom, colors[index]);
+      }
+    }
+  });
+
+  // Utiliser la fonction générique d'export depuis app.js
+  if (window.exportMapAsJpg && veilleMap) {
+    await window.exportMapAsJpg(veilleMap, "veille", veilleActiveEntities, veilleEntityColors);
+  } else {
+    alert("Fonction d'export JPG non disponible ou carte non initialisée");
+  }
+}
+
+
+/* ---- Flux "Rechercher" ---- */
 async function runSearch(opts = {}){
   const override = opts.awardee && String(opts.awardee).trim();
 
@@ -464,6 +495,12 @@ function initVeille(){
 
   V_GO.addEventListener("click", runSearch);
   V_EXPORT.addEventListener("click", exportExcel);
+
+  // Hook up JPG export button
+  const veilleExportJpgBtn = document.getElementById("veilleExportJpg");
+  if (veilleExportJpgBtn) {
+    veilleExportJpgBtn.addEventListener("click", veilleExportJpg);
+  }
 
   // Enter ↵ déclenche la recherche depuis q ET awardee
   const handleEnter = (e)=>{ if (e.key === "Enter") runSearch(); };
