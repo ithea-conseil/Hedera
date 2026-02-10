@@ -39,123 +39,6 @@ let refActiveCompanies = new Set();
 let refCompanyColors = new Map();
 let refMarkersLayer;
 
-/* DROM inset maps */
-const REF_DROM_CONFIGS = [
-  { name: "Guadeloupe", center: [16.25, -61.58], zoom: 9, bounds: [[15.8, -61.9], [16.6, -61.2]] },
-  { name: "Martinique", center: [14.64, -61.02], zoom: 10, bounds: [[14.3, -61.3], [15.0, -60.7]] },
-  { name: "Guyane", center: [3.93, -53.12], zoom: 7, bounds: [[2.0, -54.6], [5.8, -51.6]] },
-  { name: "La Réunion", center: [-21.11, 55.53], zoom: 10, bounds: [[-21.4, 55.2], [-20.8, 55.8]] },
-  { name: "Mayotte", center: [-12.83, 45.14], zoom: 11, bounds: [[-13.0, 44.9], [-12.6, 45.4]] }
-];
-
-let refDromMaps = [];
-let refDromLayers = [];
-
-function refIsDromCoord(lat, lon) {
-  for (const drom of REF_DROM_CONFIGS) {
-    const [[minLat, minLon], [maxLat, maxLon]] = drom.bounds;
-    if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
-      return drom;
-    }
-  }
-  return null;
-}
-
-function refInitDromMaps(containerId) {
-  const container = document.getElementById(containerId);
-  if (!container) {
-    console.log('[REF DROM] Container not found:', containerId);
-    return;
-  }
-
-  console.log('[REF DROM] Initializing DROM maps in container:', containerId);
-
-  refDromMaps.forEach(m => {
-    try { m.map.remove(); } catch(e) {}
-  });
-  refDromMaps = [];
-  refDromLayers = [];
-  container.innerHTML = '';
-
-  REF_DROM_CONFIGS.forEach((drom, idx) => {
-    const inset = document.createElement('div');
-    inset.className = 'drom-inset';
-    inset.style.display = 'none';
-
-    const mapDiv = document.createElement('div');
-    mapDiv.className = 'drom-map';
-    mapDiv.id = `ref-drom-map-${idx}`;
-
-    const label = document.createElement('div');
-    label.className = 'drom-label';
-    label.textContent = drom.name;
-
-    inset.appendChild(mapDiv);
-    inset.appendChild(label);
-    container.appendChild(inset);
-
-    // Create mini Leaflet map after DOM insertion
-    setTimeout(() => {
-      const miniMap = L.map(mapDiv.id, {
-        zoomControl: false,
-        attributionControl: false,
-        dragging: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false,
-        touchZoom: false
-      }).setView(drom.center, drom.zoom);
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19
-      }).addTo(miniMap);
-
-      const layer = L.layerGroup().addTo(miniMap);
-
-      refDromMaps.push({ map: miniMap, config: drom, inset, layer });
-      refDromLayers.push(layer);
-
-      // Invalidate size to ensure proper rendering
-      setTimeout(() => miniMap.invalidateSize(), 100);
-    }, 50);
-  });
-
-  console.log('[REF DROM] Created', REF_DROM_CONFIGS.length, 'DROM inset maps');
-}
-
-function refAddDromMarker(dromIndex, lat, lon, color, clickHandler) {
-  if (dromIndex < 0 || dromIndex >= refDromMaps.length) {
-    console.log('[REF DROM] Invalid dromIndex:', dromIndex, 'or maps not ready');
-    return;
-  }
-
-  const { map, inset, layer } = refDromMaps[dromIndex];
-  console.log('[REF DROM] Adding marker to', REF_DROM_CONFIGS[dromIndex].name, 'at', lat, lon);
-
-  if (inset.style.display === 'none') {
-    inset.style.display = 'block';
-    console.log('[REF DROM] Showing inset for', REF_DROM_CONFIGS[dromIndex].name);
-  }
-
-  const icon = L.divIcon({
-    className: 'person-marker',
-    html: `<span style="display:block; width:12px; height:12px; border-radius:50%;
-      background:${color};
-      border: 3px solid rgba(255,255,255,.95);
-      box-shadow: 0 0 0 1px rgba(0,0,0,.45);"></span>`,
-    iconSize: [18, 18]
-  });
-
-  const marker = L.marker([lat, lon], { icon });
-  if (clickHandler) {
-    marker.on('click', clickHandler);
-  }
-  layer.addLayer(marker);
-
-  return marker;
-}
-
 // --- Jitter des marqueurs (répartition en anneaux hexagonaux) ---
 function refJitterLatLng(baseLatLng, indexInGroup, groupSize){
   if (!refMap) return baseLatLng;
@@ -246,11 +129,8 @@ function initRefMap() {
     L.control.zoom({ position: "bottomleft" }).addTo(refMap);
     refMarkersLayer = L.layerGroup().addTo(refMap);
 
-    // Recalcule l'écartement quand on zoome/dézoome
+    // Recalcule l’écartement quand on zoome/dézoome
     refMap.on('zoomend', refReflowJitter);
-
-    // Init DROM inset maps
-    refInitDromMaps('refDromContainer');
 
     
     // Force l'invalidation de la taille après un court délai
@@ -289,41 +169,33 @@ async function loadReferences() {
   const dataRows = rows.slice(5);
   console.log("[Références] Nombre de lignes de données :", dataRows.length);
 
-  const pick = (obj, names) => {
-    for (const n of names) {
-      if (n in obj) return obj[n];
-    }
-    return "";
-  };
-
   const items = dataRows.map((row, idx) => {
     const obj = {};
     headers.forEach((h, i) => { obj[h] = row[i] || ""; });
-
+    
     const lat = refParseNumber(obj["lat"]);
     const lon = refParseNumber(obj["lon"]);
-
+    
     const item = {
-      entite: pick(obj, ["Entité", "Entite"]),
-      intitule: pick(obj, ["Intitulé mission", "Intitule mission"]),
-      territoire: pick(obj, ["Territoire"]),
-      annee: pick(obj, ["Année", "Annee"]),
-      cheffe: pick(obj, ["Cheffe de projet", "Chef de projet"]),
-      titreReferent: pick(obj, ["Titre référent", "Titre referent", "Fonction référent", "Fonction referent"]),
-      nomReferent: pick(obj, ["Nom référent", "Nom referent", "Prénom Nom référent", "Prenom Nom referent"]),
-      mail: pick(obj, ["Mail", "Email", "Adresse mail"]),
-      tel: pick(obj, ["Tél", "Tel", "Téléphone", "Telephone"]),
-      montant: refParseNumber(pick(obj, ["Montant"])),
+      entite: obj["Entité"] || "",
+      intitule: obj["Intitulé mission"] || "",
+      territoire: obj["Territoire"] || "",
+      annee: obj["Année"] || "",
+      cheffe: obj["Cheffe de projet"] || "",
+      titreReferent: obj["Titre référent"] || "",
+      nomReferent: obj["Nom référent"] || "",
+      mail: obj["Mail"] || "",
+      tel: obj["Tél"] || "",
+      montant: refParseNumber(obj["Montant"]),
       lat: lat,
       lon: lon
     };
-
+    
     // Debug première ligne
     if (idx === 0) {
       console.log("[Références] Exemple première ligne:", item);
-      console.log("[Références] Headers disponibles:", headers);
     }
-
+    
     return item;
   });
 
@@ -340,65 +212,39 @@ function refAddMarkers() {
   refMarkers = [];
   if (!refMarkersLayer) return;
 
-  // Clear DROM layers (if they exist)
-  if (refDromLayers && refDromLayers.length > 0) {
-    refDromLayers.forEach(layer => {
-      try { layer.clearLayers(); } catch(e) {}
-    });
-  }
-  if (refDromMaps && refDromMaps.length > 0) {
-    refDromMaps.forEach(({ inset }) => {
-      if (inset) inset.style.display = 'none';
-    });
-  }
-
   references.forEach((ref) => {
     const color = refCompanyColors.get(ref.entite) || "#2ea76b";
+    const icon = L.divIcon({
+      className: 'person-marker',
+      html: `<span style="display:block; width:18px; height:18px; border-radius:50%;
+        background:${color};
+        box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
+        "></span>`,
+      iconSize: [18, 18]
+    });
 
-    // Check if marker is in DROM
-    const dromConfig = refIsDromCoord(ref.lat, ref.lon);
+    const m = L.marker([ref.lat, ref.lon], { icon, riseOnHover: true, __entite: ref.entite });
 
-    if (dromConfig) {
-      // Add to DROM inset map
-      const dromIndex = REF_DROM_CONFIGS.findIndex(d => d.name === dromConfig.name);
-      if (dromIndex >= 0) {
-        refAddDromMarker(dromIndex, ref.lat, ref.lon, color, () => refOpenPopup(ref, null));
-      }
-    } else {
-      // Add to main map
-      const icon = L.divIcon({
-        className: 'person-marker',
-        html: `<span style="display:block; width:12px; height:12px; border-radius:50%;
-          background:${color};
-          border: 3px solid rgba(255,255,255,.95);
-          box-shadow: 0 0 0 1px rgba(0,0,0,.45);
-          "></span>`,
-        iconSize: [18, 18]
-      });
+    // Hover tooltip - format simple comme l'Annuaire
+    m.on('mouseover', () => {
+    const tooltip = String(ref.intitule || "").trim();
+    m.bindTooltip(tooltip || "Référence", {
+      className: 'mini-tip ref-tip',   // <- extra classe pour cibler le style
+      direction: 'top',
+      offset: [0, -12.5],
+      opacity: 1,
+      permanent: false,
+      sticky: false,
+      interactive: false
+    }).openTooltip();
 
-      const m = L.marker([ref.lat, ref.lon], { icon, riseOnHover: true, __entite: ref.entite });
+    });
+    m.on('mouseout', () => { m.closeTooltip(); });
 
-      // Hover tooltip - format simple comme l'Annuaire
-      m.on('mouseover', () => {
-      const tooltip = String(ref.intitule || "").trim();
-      m.bindTooltip(tooltip || "Référence", {
-        className: 'mini-tip ref-tip',   // <- extra classe pour cibler le style
-        direction: 'top',
-        offset: [0, -12.5],
-        opacity: 1,
-        permanent: false,
-        sticky: false,
-        interactive: false
-      }).openTooltip();
+    // Click: detailed popup
+    m.on('click', () => refOpenPopup(ref, m));
 
-      });
-      m.on('mouseout', () => { m.closeTooltip(); });
-
-      // Click: detailed popup
-      m.on('click', () => refOpenPopup(ref, m));
-
-      refMarkers.push(m);
-    }
+    refMarkers.push(m);
   });
 }
 
@@ -666,145 +512,6 @@ function refExportExcel() {
 
 
 
-/* Export JPG for References */
-function refExportJPG() {
-  if (!window.html2canvas) {
-    alert("Bibliothèque html2canvas absente");
-    return;
-  }
-
-  const mapElement = document.getElementById("refMap");
-  if (!mapElement) {
-    alert("Carte non trouvée");
-    return;
-  }
-
-  // Créer un overlay avec titre et légende
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 9999;
-  `;
-
-  // Titre en haut
-  const titleDiv = document.createElement("div");
-  titleDiv.style.cssText = `
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 12px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    font-size: 18px;
-    font-weight: bold;
-    color: #0c0f0e;
-  `;
-  titleDiv.textContent = "Références";
-  overlay.appendChild(titleDiv);
-
-  // Légende en bas
-  const legendDiv = document.createElement("div");
-  legendDiv.style.cssText = `
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 16px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    max-width: 90%;
-  `;
-
-  // Ajouter les entités actives avec leurs couleurs
-  refActiveCompanies.forEach(company => {
-    const color = refCompanyColors.get(company) || '#2ea76b';
-    const item = document.createElement("div");
-    item.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    `;
-
-    const dot = document.createElement("div");
-    dot.style.cssText = `
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: ${color};
-      border: 3px solid rgba(255,255,255,.95);
-      box-shadow: 0 0 0 1px rgba(0,0,0,.45);
-      flex-shrink: 0;
-    `;
-
-    const label = document.createElement("span");
-    label.style.cssText = `
-      font-size: 12px;
-      color: #0c0f0e;
-      font-weight: 500;
-    `;
-    label.textContent = company;
-
-    item.appendChild(dot);
-    item.appendChild(label);
-    legendDiv.appendChild(item);
-  });
-
-  overlay.appendChild(legendDiv);
-  mapElement.appendChild(overlay);
-
-  // Capturer la carte avec overlay
-  html2canvas(mapElement, {
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#0c0f0e',
-    scale: 2
-  }).then(sourceCanvas => {
-    // Supprimer l'overlay
-    overlay.remove();
-
-    // Créer un canvas carré en prenant le minimum des dimensions
-    const squareSize = Math.min(sourceCanvas.width, sourceCanvas.height);
-    const squareCanvas = document.createElement('canvas');
-    squareCanvas.width = squareSize;
-    squareCanvas.height = squareSize;
-
-    const ctx = squareCanvas.getContext('2d');
-
-    // Calculer les offsets pour centrer l'image
-    const offsetX = (sourceCanvas.width - squareSize) / 2;
-    const offsetY = (sourceCanvas.height - squareSize) / 2;
-
-    // Dessiner la partie centrale de l'image source
-    ctx.drawImage(
-      sourceCanvas,
-      offsetX, offsetY, squareSize, squareSize,  // source
-      0, 0, squareSize, squareSize               // destination
-    );
-
-    // Télécharger l'image carrée
-    const link = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.download = `references_${dateStr}.jpg`;
-    link.href = squareCanvas.toDataURL('image/jpeg', 0.95);
-    link.click();
-  }).catch(err => {
-    overlay.remove();
-    console.error("Erreur lors de l'export JPG:", err);
-    alert("Erreur lors de l'export de la carte");
-  });
-}
-
 /* Bootstrap References module */
 async function initReferences() {
   try {
@@ -821,13 +528,9 @@ async function initReferences() {
     // 3. Setup UI
     const companies = refComputePalette(references);
     refRenderCompanyChips(companies);
-
-    // Wait for DROM maps to be initialized before adding markers
-    setTimeout(() => {
-      refAddMarkers();
-      refRenderList(references);
-      refApplyFilters();
-    }, 200);
+    refAddMarkers();
+    refRenderList(references);
+    refApplyFilters();
 
     // 4. Event listeners
     const refSearchInput = document.getElementById("refSearch");
@@ -849,7 +552,14 @@ async function initReferences() {
       });
     }
 
-    // 5. Setup toggle button
+    // 5. Add export button
+    const exportBtn = document.createElement("button");
+    exportBtn.className = "soft";
+    exportBtn.textContent = "Exporter Excel";
+    exportBtn.addEventListener("click", refExportExcel);
+    document.querySelector("#refPanel .filters-head").appendChild(exportBtn);
+    
+    // 6. Setup toggle button
     const toggleBtn = document.getElementById("refPanelToggle");
     if (toggleBtn) {
       toggleBtn.addEventListener("click", () => {
@@ -857,12 +567,6 @@ async function initReferences() {
         toggleBtn.textContent = collapsed ? "⟨" : "⟩";
       });
     }
-
-    // 6. Setup export buttons in header
-    const excelBtn = document.getElementById("refExportExcel");
-    const jpgBtn = document.getElementById("refExportJPG");
-    if (excelBtn) excelBtn.addEventListener("click", refExportExcel);
-    if (jpgBtn) jpgBtn.addEventListener("click", refExportJPG);
 
     console.log("[Références] Initialisation terminée avec succès");
   } catch (e) {

@@ -455,93 +455,6 @@ function switchToAnnuaireOrRefs(){
   }, 30);
 }
 
-/* ---- Export JPG ---- */
-function veilleExportJPG() {
-  if (!window.html2canvas) {
-    alert("Bibliothèque html2canvas absente");
-    return;
-  }
-
-  const mapElement = document.getElementById("veilleMap");
-  if (!mapElement) {
-    alert("Carte non trouvée");
-    return;
-  }
-
-  // Créer un overlay avec titre
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 9999;
-  `;
-
-  // Titre en haut
-  const titleDiv = document.createElement("div");
-  titleDiv.style.cssText = `
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 12px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    font-size: 18px;
-    font-weight: bold;
-    color: #0c0f0e;
-  `;
-  titleDiv.textContent = "Veille concurrentielle";
-  overlay.appendChild(titleDiv);
-
-  mapElement.appendChild(overlay);
-
-  // Capturer la carte avec overlay
-  html2canvas(mapElement, {
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#0c0f0e',
-    scale: 2
-  }).then(sourceCanvas => {
-    // Supprimer l'overlay
-    overlay.remove();
-
-    // Créer un canvas carré en prenant le minimum des dimensions
-    const squareSize = Math.min(sourceCanvas.width, sourceCanvas.height);
-    const squareCanvas = document.createElement('canvas');
-    squareCanvas.width = squareSize;
-    squareCanvas.height = squareSize;
-
-    const ctx = squareCanvas.getContext('2d');
-
-    // Calculer les offsets pour centrer l'image
-    const offsetX = (sourceCanvas.width - squareSize) / 2;
-    const offsetY = (sourceCanvas.height - squareSize) / 2;
-
-    // Dessiner la partie centrale de l'image source
-    ctx.drawImage(
-      sourceCanvas,
-      offsetX, offsetY, squareSize, squareSize,  // source
-      0, 0, squareSize, squareSize               // destination
-    );
-
-    // Télécharger l'image carrée
-    const link = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.download = `veille_concurrentielle_${dateStr}.jpg`;
-    link.href = squareCanvas.toDataURL('image/jpeg', 0.95);
-    link.click();
-  }).catch(err => {
-    overlay.remove();
-    console.error("Erreur lors de l'export JPG:", err);
-    alert("Erreur lors de l'export de la carte");
-  });
-}
-
 function initVeille(){
   if (!TAB_VEILLE) return;
 
@@ -551,10 +464,6 @@ function initVeille(){
 
   V_GO.addEventListener("click", runSearch);
   V_EXPORT.addEventListener("click", exportExcel);
-
-  // Export JPG button
-  const jpgBtn = document.getElementById("veilleExportJPG");
-  if (jpgBtn) jpgBtn.addEventListener("click", veilleExportJPG);
 
   // Enter ↵ déclenche la recherche depuis q ET awardee
   const handleEnter = (e)=>{ if (e.key === "Enter") runSearch(); };

@@ -19,9 +19,6 @@
   <!-- Export Excel (utilisé par veille.js et references.js) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
-  <!-- Export JPG (pour capture de carte) -->
-  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
-
   <style>
   .info-wrapper {
     position: relative;
@@ -204,10 +201,7 @@
   <!-- === VUE : ANNUAIRE (existant) === -->
   <section id="view-annuaire" class="view active" aria-label="Section Annuaire">
     <div id="app">
-      <div id="map" aria-label="Carte des collaborateurs">
-        <!-- DROM inset maps -->
-        <div class="drom-container" id="dromContainer"></div>
-      </div>
+      <div id="map" aria-label="Carte des collaborateurs"></div>
 
       <aside id="panel" aria-label="Panneau latéral des filtres et résultats">
         <button id="panelToggle" aria-expanded="true" aria-controls="panel" title="Afficher/Masquer le panneau">⟩</button>
@@ -215,10 +209,6 @@
         <header class="panel-header">
           <div class="brand">
             <h1>Annuaire</h1>
-          </div>
-          <div class="export-buttons">
-            <button id="annuaireExportExcel" class="export-btn" title="Exporter en Excel">Export Excel</button>
-            <button id="annuaireExportJPG" class="export-btn" title="Exporter la carte en JPG">Export JPG</button>
           </div>
         </header>
 
@@ -247,10 +237,7 @@
   <!-- === VUE : RÉFÉRENCES (nouvelle carte + panneau dédié) === -->
   <section id="view-references" class="view" aria-label="Section Références">
     <div id="refApp">
-      <div id="refMap" aria-label="Carte des références">
-        <!-- DROM inset maps -->
-        <div class="drom-container" id="refDromContainer"></div>
-      </div>
+      <div id="refMap" aria-label="Carte des références"></div>
 
       <aside id="refPanel" aria-label="Panneau des références">
         <button id="refPanelToggle" aria-expanded="true" aria-controls="refPanel" title="Afficher/Masquer le panneau">⟩</button>
@@ -258,10 +245,6 @@
         <header class="panel-header">
           <div class="brand">
             <h1>Références</h1>
-          </div>
-          <div class="export-buttons">
-            <button id="refExportExcel" class="export-btn" title="Exporter en Excel">Export Excel</button>
-            <button id="refExportJPG" class="export-btn" title="Exporter la carte en JPG">Export JPG</button>
           </div>
         </header>
 
@@ -304,9 +287,6 @@
       <header class="panel-header">
         <div class="brand">
           <h1>Veille concurrentielle</h1>
-        </div>
-        <div class="export-buttons">
-          <button id="veilleExportJPG" class="export-btn" title="Exporter la carte en JPG">Export JPG</button>
         </div>
       </header>
 

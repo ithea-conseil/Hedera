@@ -149,126 +149,6 @@ function reflowJitter(){
 }
 
 
-/* DROM inset maps configuration */
-const DROM_CONFIGS = [
-  { name: "Guadeloupe", center: [16.25, -61.58], zoom: 9, bounds: [[15.8, -61.9], [16.6, -61.2]] },
-  { name: "Martinique", center: [14.64, -61.02], zoom: 10, bounds: [[14.3, -61.3], [15.0, -60.7]] },
-  { name: "Guyane", center: [3.93, -53.12], zoom: 7, bounds: [[2.0, -54.6], [5.8, -51.6]] },
-  { name: "La Réunion", center: [-21.11, 55.53], zoom: 10, bounds: [[-21.4, 55.2], [-20.8, 55.8]] },
-  { name: "Mayotte", center: [-12.83, 45.14], zoom: 11, bounds: [[-13.0, 44.9], [-12.6, 45.4]] }
-];
-
-let dromMaps = [];
-let dromLayers = [];
-
-function isDromCoord(lat, lon) {
-  // Check if coordinates are in DROM bounds
-  for (const drom of DROM_CONFIGS) {
-    const [[minLat, minLon], [maxLat, maxLon]] = drom.bounds;
-    if (lat >= minLat && lat <= maxLat && lon >= minLon && lon <= maxLon) {
-      return drom;
-    }
-  }
-  return null;
-}
-
-function initDromMaps(containerId, onMarkerClick) {
-  const container = document.getElementById(containerId);
-  if (!container) {
-    console.log('[DROM] Container not found:', containerId);
-    return;
-  }
-
-  console.log('[DROM] Initializing DROM maps in container:', containerId);
-
-  // Clear existing
-  dromMaps.forEach(m => {
-    try { m.map.remove(); } catch(e) {}
-  });
-  dromMaps = [];
-  dromLayers = [];
-  container.innerHTML = '';
-
-  DROM_CONFIGS.forEach((drom, idx) => {
-    const inset = document.createElement('div');
-    inset.className = 'drom-inset';
-    inset.style.display = 'none'; // Hidden by default, shown when markers are added
-
-    const mapDiv = document.createElement('div');
-    mapDiv.className = 'drom-map';
-    mapDiv.id = `drom-map-${idx}`;
-
-    const label = document.createElement('div');
-    label.className = 'drom-label';
-    label.textContent = drom.name;
-
-    inset.appendChild(mapDiv);
-    inset.appendChild(label);
-    container.appendChild(inset);
-
-    // Create mini Leaflet map after DOM insertion
-    setTimeout(() => {
-      const miniMap = L.map(mapDiv.id, {
-        zoomControl: false,
-        attributionControl: false,
-        dragging: false,
-        scrollWheelZoom: false,
-        doubleClickZoom: false,
-        boxZoom: false,
-        keyboard: false,
-        touchZoom: false
-      }).setView(drom.center, drom.zoom);
-
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19
-      }).addTo(miniMap);
-
-      const layer = L.layerGroup().addTo(miniMap);
-
-      dromMaps.push({ map: miniMap, config: drom, inset, layer });
-      dromLayers.push(layer);
-
-      // Invalidate size to ensure proper rendering
-      setTimeout(() => miniMap.invalidateSize(), 100);
-    }, 50);
-  });
-
-  console.log('[DROM] Created', DROM_CONFIGS.length, 'DROM inset maps');
-}
-
-function addDromMarker(dromIndex, lat, lon, color, clickHandler) {
-  if (dromIndex < 0 || dromIndex >= dromMaps.length) {
-    console.log('[DROM] Invalid dromIndex:', dromIndex);
-    return;
-  }
-
-  const { map, inset, layer } = dromMaps[dromIndex];
-  console.log('[DROM] Adding marker to', DROM_CONFIGS[dromIndex].name, 'at', lat, lon);
-
-  // Show inset if hidden
-  if (inset.style.display === 'none') {
-    inset.style.display = 'block';
-    console.log('[DROM] Showing inset for', DROM_CONFIGS[dromIndex].name);
-  }
-
-  const icon = L.divIcon({
-    className: 'person-marker',
-    html: `<span style="display:block; width:12px; height:12px; border-radius:50%;
-      background:${color};
-      border: 3px solid rgba(255,255,255,.95);
-      box-shadow: 0 0 0 1px rgba(0,0,0,.45);"></span>`,
-    iconSize: [18, 18]
-  });
-
-  const marker = L.marker([lat, lon], { icon });
-  if (clickHandler) {
-    marker.on('click', clickHandler);
-  }
-  layer.addLayer(marker);
-
-  return marker;
-}
-
 /* Map */
 function initMap(){
   map = L.map("map", { zoomControl:false }).setView([46.71109, 1.7191036], 6);
@@ -283,9 +163,6 @@ function initMap(){
 
   // À chaque zoom, on recalcule le jitter pour les marqueurs visibles
   map.on('zoomend', reflowJitter);
-
-  // Init DROM inset maps
-  initDromMaps('dromContainer');
 }
 
 
@@ -425,65 +302,41 @@ function addMarkers(){
   markers.forEach(m => m.remove());
   markers = [];
 
-  // Clear DROM layers (if they exist)
-  if (dromLayers && dromLayers.length > 0) {
-    dromLayers.forEach(layer => {
-      try { layer.clearLayers(); } catch(e) {}
-    });
-  }
-  if (dromMaps && dromMaps.length > 0) {
-    dromMaps.forEach(({ inset }) => {
-      if (inset) inset.style.display = 'none';
-    });
-  }
-
   people.forEach((p)=>{
     const color = companyColors.get(p.entite) || "#2ea76b";
+    const icon = L.divIcon({
+      className: 'person-marker',
+      html: `
+        <span style="
+          display:block; width:22px; height:22px; border-radius:50%;
+          background:${color};
+          box-shadow:
+            0 0 0 2px rgba(255,255,255,.95) inset,
+            0 0 0 1px rgba(0,0,0,.45);
+        "></span>`,
+      iconSize: [22,22]
+    });
 
-    // Check if marker is in DROM
-    const dromConfig = isDromCoord(p.lat, p.lon);
+    const m = L.marker([p.lat, p.lon], { icon, riseOnHover:true, __entite: p.entite });
 
-    if (dromConfig) {
-      // Add to DROM inset map
-      const dromIndex = DROM_CONFIGS.findIndex(d => d.name === dromConfig.name);
-      if (dromIndex >= 0) {
-        addDromMarker(dromIndex, p.lat, p.lon, color, () => openPopup(p, null));
-      }
-    } else {
-      // Add to main map
-      const icon = L.divIcon({
-        className: 'person-marker',
-        html: `
-          <span style="
-            display:block; width:16px; height:16px; border-radius:50%;
-            background:${color};
-            border: 3px solid rgba(255,255,255,.95);
-            box-shadow: 0 0 0 1px rgba(0,0,0,.45);
-          "></span>`,
-        iconSize: [22,22]
-      });
+    // --- Hover: étiquette simple, non interactive, qui se ferme en sortant du point ---
+    m.on('mouseover', () => {
+      m.bindTooltip(simpleTipText(p), {
+        className: 'mini-tip',
+        direction: 'top',
+        offset: [0,-14],
+        opacity: 1,
+        permanent: false,
+        sticky: false,     // reste affichée uniquement tant que la souris est "sur" le point
+        interactive: false // même si on passe sur l’étiquette, elle ne garde pas le focus
+      }).openTooltip();
+    });
+    m.on('mouseout', () => { m.closeTooltip(); });
 
-      const m = L.marker([p.lat, p.lon], { icon, riseOnHover:true, __entite: p.entite });
+    // --- Clic: fiche complète (popup) ---
+    m.on('click', () => openPopup(p, m));
 
-      // --- Hover: étiquette simple, non interactive, qui se ferme en sortant du point ---
-      m.on('mouseover', () => {
-        m.bindTooltip(simpleTipText(p), {
-          className: 'mini-tip',
-          direction: 'top',
-          offset: [0,-14],
-          opacity: 1,
-          permanent: false,
-          sticky: false,     // reste affichée uniquement tant que la souris est "sur" le point
-          interactive: false // même si on passe sur l'étiquette, elle ne garde pas le focus
-        }).openTooltip();
-      });
-      m.on('mouseout', () => { m.closeTooltip(); });
-
-      // --- Clic: fiche complète (popup) ---
-      m.on('click', () => openPopup(p, m));
-
-      markers.push(m);
-    }
+    markers.push(m);
   });
 }
 
@@ -808,195 +661,6 @@ function matchesQuery(p, tks){
   return tks.every(t => hay.includes(t));
 }
 
-/* Export Excel */
-function exportAnnuaireExcel() {
-  if (!window.XLSX) {
-    alert("Bibliothèque XLSX absente");
-    return;
-  }
-
-  const searchInput = document.getElementById("search");
-  const rawQuery = (searchInput.value || "").trim();
-  const tks = tokens(rawQuery);
-
-  const filtered = people.filter(p => {
-    if (!activeCompanies.has(p.entite)) return false;
-    if (!tks.length) return true;
-    const hay = norm([p.nom, p.prenom, p.entite, p.poste, p.email, p.tel, p.competences].join(" "));
-    return tks.every(t => hay.includes(t));
-  });
-
-  const exportData = filtered.map(p => ({
-    "Nom": p.nom,
-    "Prénom": p.prenom,
-    "Entité": p.entite,
-    "Poste": p.poste,
-    "Ville": p.ville,
-    "Email": p.email,
-    "Téléphone": p.tel,
-    "Compétences": p.competences
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(exportData);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Annuaire");
-
-  // Nom de fichier avec date
-  const dateStr = new Date().toISOString().slice(0, 10);
-  const slug = (str) => {
-    return String(str || "")
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-zA-Z0-9-_]+/g, "_")
-      .replace(/^_+|_+$/g, "");
-  };
-
-  const parts = ["annuaire"];
-  if (rawQuery) parts.push(slug(rawQuery));
-  parts.push(dateStr);
-
-  const fname = `${parts.join("_")}.xlsx`;
-  XLSX.writeFile(wb, fname);
-}
-
-/* Export JPG */
-function exportMapJPG(mapId, title) {
-  if (!window.html2canvas) {
-    alert("Bibliothèque html2canvas absente");
-    return;
-  }
-
-  const mapElement = document.getElementById(mapId);
-  if (!mapElement) {
-    alert("Carte non trouvée");
-    return;
-  }
-
-  // Créer un overlay avec titre et légende
-  const overlay = document.createElement("div");
-  overlay.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    pointer-events: none;
-    z-index: 9999;
-  `;
-
-  // Titre en haut
-  const titleDiv = document.createElement("div");
-  titleDiv.style.cssText = `
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 12px 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    font-size: 18px;
-    font-weight: bold;
-    color: #0c0f0e;
-  `;
-  titleDiv.textContent = title;
-  overlay.appendChild(titleDiv);
-
-  // Légende en bas
-  const legendDiv = document.createElement("div");
-  legendDiv.style.cssText = `
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(255, 255, 255, 0.95);
-    padding: 16px;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    max-width: 90%;
-  `;
-
-  // Ajouter les entités actives avec leurs couleurs
-  activeCompanies.forEach(company => {
-    const color = companyColors.get(company) || '#2ea76b';
-    const item = document.createElement("div");
-    item.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    `;
-
-    const dot = document.createElement("div");
-    dot.style.cssText = `
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: ${color};
-      border: 3px solid rgba(255,255,255,.95);
-      box-shadow: 0 0 0 1px rgba(0,0,0,.45);
-      flex-shrink: 0;
-    `;
-
-    const label = document.createElement("span");
-    label.style.cssText = `
-      font-size: 12px;
-      color: #0c0f0e;
-      font-weight: 500;
-    `;
-    label.textContent = company;
-
-    item.appendChild(dot);
-    item.appendChild(label);
-    legendDiv.appendChild(item);
-  });
-
-  overlay.appendChild(legendDiv);
-  mapElement.appendChild(overlay);
-
-  // Capturer la carte avec overlay
-  html2canvas(mapElement, {
-    useCORS: true,
-    allowTaint: true,
-    backgroundColor: '#0c0f0e',
-    scale: 2
-  }).then(sourceCanvas => {
-    // Supprimer l'overlay
-    overlay.remove();
-
-    // Créer un canvas carré en prenant le minimum des dimensions
-    const squareSize = Math.min(sourceCanvas.width, sourceCanvas.height);
-    const squareCanvas = document.createElement('canvas');
-    squareCanvas.width = squareSize;
-    squareCanvas.height = squareSize;
-
-    const ctx = squareCanvas.getContext('2d');
-
-    // Calculer les offsets pour centrer l'image
-    const offsetX = (sourceCanvas.width - squareSize) / 2;
-    const offsetY = (sourceCanvas.height - squareSize) / 2;
-
-    // Dessiner la partie centrale de l'image source
-    ctx.drawImage(
-      sourceCanvas,
-      offsetX, offsetY, squareSize, squareSize,  // source
-      0, 0, squareSize, squareSize               // destination
-    );
-
-    // Télécharger l'image carrée
-    const link = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.download = `${title.toLowerCase().replace(/\s+/g, '_')}_${dateStr}.jpg`;
-    link.href = squareCanvas.toDataURL('image/jpeg', 0.95);
-    link.click();
-  }).catch(err => {
-    overlay.remove();
-    console.error("Erreur lors de l'export JPG:", err);
-    alert("Erreur lors de l'export de la carte");
-  });
-}
-
 /* Bootstrap */
 async function main(){
   initMap();
@@ -1010,13 +674,9 @@ async function main(){
 
   const companies = computePalette(people);
   renderCompanyChips(companies);
-
-  // Wait for DROM maps to be initialized before adding markers
-  setTimeout(() => {
-    addMarkers();
-    renderList(people);
-    applyFilters();
-  }, 200);
+  addMarkers();
+  renderList(people);
+  applyFilters();
 
   $("#filtersReset").addEventListener("click", ()=>{
     renderCompanyChips(companies);
@@ -1034,10 +694,6 @@ async function main(){
     const collapsed = document.body.classList.toggle("panel-collapsed");
     toggle.textContent = collapsed ? "⟨" : "⟩";
   });
-
-  // Export buttons
-  $("#annuaireExportExcel").addEventListener("click", exportAnnuaireExcel);
-  $("#annuaireExportJPG").addEventListener("click", () => exportMapJPG("map", "Annuaire"));
 
   $("#modalClose").addEventListener("click", ()=> $("#modal").classList.add("hidden"));
   $("#modal").addEventListener("click", (e)=>{
