@@ -853,7 +853,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Dessiner les éléments de la légende
     const entitiesArray = Array.from(activeEntities);
-    const itemsPerRow = 4;
+    const itemsPerRow = 5;
     const itemWidth = finalSize / itemsPerRow;
     const startY = legendY + 130;
     const rowHeight = 55;
@@ -868,7 +868,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
       const color = entityColors.get(entityName) || "#2ea76b";
       const centerX = x - 110;
       const centerY = y;
-      const radius = 11; // 22px de diamètre comme sur la carte
+      const radius = 15; // 22px de diamètre comme sur la carte
 
       // Cercle de couleur
       ctx.fillStyle = color;
@@ -892,7 +892,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
       // Texte de l'entité
       ctx.fillStyle = '#000';
-      ctx.font = '28px Arial';
+      ctx.font = '40px Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(entityName, centerX + radius + 12, centerY);
