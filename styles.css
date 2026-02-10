@@ -56,9 +56,30 @@ body{
   transition: transform .35s ease;
   z-index:1000;
 }
-.panel-header{ padding:12px; border-bottom:1px solid var(--border) }
+.panel-header{
+  padding:12px;
+  border-bottom:1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
 .brand h1{ margin:0; font-size:20px }
 .brand .muted{ margin: 4px 0 0; color:var(--muted); font-size:12px }
+
+/* Export actions buttons */
+.export-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.export-actions button {
+  font-size: 11px;
+  padding: 4px 8px;
+  opacity: 0.8;
+}
+.export-actions button:hover {
+  opacity: 1;
+}
 
 .controls{ padding:12px; border-bottom:1px solid var(--border) }
 .search-row{ display:flex; gap:8px; align-items:center }

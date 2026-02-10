@@ -510,6 +510,20 @@ function refExportExcel() {
   XLSX.writeFile(wb, fname);
 }
 
+/* Export JPG pour Références */
+async function refExportJpg() {
+  if (!window.html2canvas) {
+    alert("Bibliothèque html2canvas absente");
+    return;
+  }
+
+  // Utiliser la fonction générique d'export depuis app.js
+  if (window.exportMapAsJpg) {
+    await window.exportMapAsJpg(refMap, "references", refActiveCompanies, refCompanyColors);
+  } else {
+    alert("Fonction d'export JPG non disponible");
+  }
+}
 
 
 /* Bootstrap References module */
@@ -552,14 +566,20 @@ async function initReferences() {
       });
     }
 
-    // 5. Add export button
+    // 5. Add export button (Excel)
     const exportBtn = document.createElement("button");
     exportBtn.className = "soft";
     exportBtn.textContent = "Exporter Excel";
     exportBtn.addEventListener("click", refExportExcel);
     document.querySelector("#refPanel .filters-head").appendChild(exportBtn);
-    
-    // 6. Setup toggle button
+
+    // 6. Hook up JPG export button
+    const refExportJpgBtn = document.getElementById("refExportJpg");
+    if (refExportJpgBtn) {
+      refExportJpgBtn.addEventListener("click", refExportJpg);
+    }
+
+    // 7. Setup toggle button
     const toggleBtn = document.getElementById("refPanelToggle");
     if (toggleBtn) {
       toggleBtn.addEventListener("click", () => {

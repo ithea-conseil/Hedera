@@ -661,6 +661,274 @@ function matchesQuery(p, tks){
   return tks.every(t => hay.includes(t));
 }
 
+/* Export Excel pour Annuaire */
+function annuaireExportExcel() {
+  if (!window.XLSX) {
+    alert("Bibliothèque XLSX absente");
+    return;
+  }
+
+  const searchInput = document.getElementById("search");
+  const rawQuery = (searchInput.value || "").trim();
+  const tks = tokens(rawQuery);
+
+  const filtered = people.filter(p => {
+    if (!activeCompanies.has(p.entite)) return false;
+    return matchesQuery(p, tks);
+  });
+
+  const exportData = filtered.map(p => ({
+    "Prénom": p.prenom,
+    "Nom": p.nom,
+    "Entité": p.entite,
+    "Poste": p.poste,
+    "Ville": p.ville,
+    "Téléphone": p.tel,
+    "Email": p.email,
+    "Compétences": p.competences
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Annuaire");
+
+  // Construction du nom de fichier
+  const searchPart = rawQuery;
+  const activeChips = document.querySelectorAll("#companies .chip.active");
+  let chipPart = "";
+  if (activeChips.length === 1) {
+    chipPart = (activeChips[0].dataset.value || activeChips[0].textContent || "").trim();
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  const slug = (str) => {
+    return String(str || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9-_]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  };
+
+  const hasSearch = !!searchPart;
+  const hasChip = !!chipPart;
+
+  const parts = [];
+  if (!hasSearch && !hasChip) {
+    parts.push("annuaire");
+  }
+  if (hasSearch) {
+    parts.push(slug(searchPart));
+  }
+  if (hasChip) {
+    parts.push(slug(chipPart));
+  }
+  parts.push(dateStr);
+
+  const baseName = parts.join("_");
+  const fname = `${baseName}.xlsx`;
+
+  XLSX.writeFile(wb, fname);
+}
+
+/* Export JPG pour Annuaire */
+async function annuaireExportJpg() {
+  if (!window.html2canvas) {
+    alert("Bibliothèque html2canvas absente");
+    return;
+  }
+
+  await exportMapAsJpg(map, "annuaire", activeCompanies, companyColors);
+}
+
+/* Fonction générique d'export JPG avec support DROM */
+async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors) {
+  try {
+    // Créer un conteneur temporaire pour l'export
+    const exportContainer = document.createElement("div");
+    exportContainer.style.position = "fixed";
+    exportContainer.style.top = "-10000px";
+    exportContainer.style.left = "-10000px";
+    exportContainer.style.width = "2000px";
+    exportContainer.style.height = "2000px";
+    exportContainer.style.backgroundColor = "#fff";
+    document.body.appendChild(exportContainer);
+
+    // Créer le conteneur de la carte principale
+    const mapContainer = document.createElement("div");
+    mapContainer.style.width = "2000px";
+    mapContainer.style.height = "1700px";
+    mapContainer.style.position = "relative";
+    exportContainer.appendChild(mapContainer);
+
+    // Créer une nouvelle instance de carte pour l'export
+    const exportMap = L.map(mapContainer, {
+      zoomControl: false,
+      attributionControl: false
+    }).setView([46.603354, 1.888334], 6);
+
+    // Ajouter les tuiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(exportMap);
+
+    // Attendre que les tuiles se chargent
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Ajouter les marqueurs visibles
+    const visibleMarkers = [];
+    mapInstance.eachLayer(layer => {
+      if (layer instanceof L.Marker) {
+        const markerLatLng = layer.getLatLng();
+        const icon = layer.options.icon;
+        const newMarker = L.marker(markerLatLng, { icon: icon }).addTo(exportMap);
+        visibleMarkers.push(newMarker);
+      }
+    });
+
+    // Créer les cartes DROM
+    const dromContainer = document.createElement("div");
+    dromContainer.style.position = "absolute";
+    dromContainer.style.left = "10px";
+    dromContainer.style.top = "300px";
+    dromContainer.style.display = "flex";
+    dromContainer.style.flexDirection = "column";
+    dromContainer.style.gap = "10px";
+    exportContainer.appendChild(dromContainer);
+
+    const dromRegions = [
+      { name: "Guadeloupe", coords: [16.265, -61.551], zoom: 9 },
+      { name: "Martinique", coords: [14.641, -61.024], zoom: 9 },
+      { name: "Guyane", coords: [3.933, -53.125], zoom: 7 },
+      { name: "La Réunion", coords: [-21.115, 55.536], zoom: 9 },
+      { name: "Mayotte", coords: [-12.827, 45.166], zoom: 10 }
+    ];
+
+    for (const drom of dromRegions) {
+      const dromBox = document.createElement("div");
+      dromBox.style.width = "250px";
+      dromBox.style.height = "250px";
+      dromBox.style.backgroundColor = "#fff";
+      dromBox.style.border = "2px solid #333";
+      dromBox.style.borderRadius = "8px";
+      dromBox.style.overflow = "hidden";
+      dromContainer.appendChild(dromBox);
+
+      const dromMapDiv = document.createElement("div");
+      dromMapDiv.style.width = "250px";
+      dromMapDiv.style.height = "220px";
+      dromBox.appendChild(dromMapDiv);
+
+      const dromLabel = document.createElement("div");
+      dromLabel.textContent = drom.name;
+      dromLabel.style.height = "30px";
+      dromLabel.style.display = "flex";
+      dromLabel.style.alignItems = "center";
+      dromLabel.style.justifyContent = "center";
+      dromLabel.style.fontWeight = "bold";
+      dromLabel.style.fontSize = "12px";
+      dromLabel.style.backgroundColor = "#f0f0f0";
+      dromLabel.style.borderTop = "1px solid #333";
+      dromBox.appendChild(dromLabel);
+
+      const dromMap = L.map(dromMapDiv, {
+        zoomControl: false,
+        attributionControl: false
+      }).setView(drom.coords, drom.zoom);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(dromMap);
+
+      // Ajouter les marqueurs pour cette région DROM si applicable
+      mapInstance.eachLayer(layer => {
+        if (layer instanceof L.Marker) {
+          const markerLatLng = layer.getLatLng();
+          const lat = markerLatLng.lat;
+          const lng = markerLatLng.lng;
+
+          // Vérifier si le marqueur est dans cette région DROM
+          const latDiff = Math.abs(lat - drom.coords[0]);
+          const lngDiff = Math.abs(lng - drom.coords[1]);
+
+          if (latDiff < 2 && lngDiff < 2) {
+            const icon = layer.options.icon;
+            L.marker(markerLatLng, { icon: icon }).addTo(dromMap);
+          }
+        }
+      });
+    }
+
+    // Créer la légende
+    const legend = document.createElement("div");
+    legend.style.position = "absolute";
+    legend.style.bottom = "0";
+    legend.style.left = "0";
+    legend.style.right = "0";
+    legend.style.height = "300px";
+    legend.style.backgroundColor = "#fff";
+    legend.style.padding = "20px";
+    legend.style.borderTop = "3px solid #333";
+    exportContainer.appendChild(legend);
+
+    const title = document.createElement("h2");
+    title.textContent = sectionName.charAt(0).toUpperCase() + sectionName.slice(1);
+    title.style.margin = "0 0 20px 0";
+    title.style.fontSize = "24px";
+    title.style.textAlign = "center";
+    legend.appendChild(title);
+
+    const legendItems = document.createElement("div");
+    legendItems.style.display = "grid";
+    legendItems.style.gridTemplateColumns = "repeat(3, 1fr)";
+    legendItems.style.gap = "15px";
+    legend.appendChild(legendItems);
+
+    activeEntities.forEach(entityName => {
+      const item = document.createElement("div");
+      item.style.display = "flex";
+      item.style.alignItems = "center";
+      item.style.gap = "10px";
+
+      const colorBox = document.createElement("div");
+      colorBox.style.width = "20px";
+      colorBox.style.height = "20px";
+      colorBox.style.borderRadius = "50%";
+      colorBox.style.backgroundColor = entityColors.get(entityName) || "#2ea76b";
+      colorBox.style.border = "2px solid #333";
+      item.appendChild(colorBox);
+
+      const label = document.createElement("span");
+      label.textContent = entityName;
+      label.style.fontSize = "14px";
+      label.style.color = "#000";
+      item.appendChild(label);
+
+      legendItems.appendChild(item);
+    });
+
+    // Attendre un peu plus pour que tout se charge
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Capturer avec html2canvas
+    const canvas = await html2canvas(exportContainer, {
+      backgroundColor: '#ffffff',
+      scale: 1,
+      logging: false
+    });
+
+    // Nettoyer
+    document.body.removeChild(exportContainer);
+
+    // Télécharger
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.95);
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.download = `${sectionName}_${dateStr}.jpg`;
+    link.href = dataUrl;
+    link.click();
+
+  } catch (error) {
+    console.error("Erreur lors de l'export JPG:", error);
+    alert("Erreur lors de l'export JPG. Consultez la console pour plus de détails.");
+  }
+}
+
 /* Bootstrap */
 async function main(){
   initMap();
@@ -699,6 +967,13 @@ async function main(){
   $("#modal").addEventListener("click", (e)=>{
     if (e.target.id === "modal") $("#modal").classList.add("hidden");
   });
+
+  // Boutons d'export
+  $("#annuaireExportExcel").addEventListener("click", annuaireExportExcel);
+  $("#annuaireExportJpg").addEventListener("click", annuaireExportJpg);
 }
+
+/* Export for global access */
+window.exportMapAsJpg = exportMapAsJpg;
 
 document.addEventListener("DOMContentLoaded", main);

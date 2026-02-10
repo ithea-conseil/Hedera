@@ -19,6 +19,9 @@
   <!-- Export Excel (utilisé par veille.js et references.js) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+  <!-- Export JPG -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
   <style>
   .info-wrapper {
     position: relative;
@@ -210,6 +213,10 @@
           <div class="brand">
             <h1>Annuaire</h1>
           </div>
+          <div class="export-actions">
+            <button id="annuaireExportExcel" class="soft">Export Excel</button>
+            <button id="annuaireExportJpg" class="soft">Export JPG</button>
+          </div>
         </header>
 
         <section class="controls">
@@ -245,6 +252,9 @@
         <header class="panel-header">
           <div class="brand">
             <h1>Références</h1>
+          </div>
+          <div class="export-actions">
+            <button id="refExportJpg" class="soft">Export JPG</button>
           </div>
         </header>
 
@@ -287,6 +297,9 @@
       <header class="panel-header">
         <div class="brand">
           <h1>Veille concurrentielle</h1>
+        </div>
+        <div class="export-actions">
+          <button id="veilleExportJpg" class="soft">Export JPG</button>
         </div>
       </header>
 
