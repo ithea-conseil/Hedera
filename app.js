@@ -852,51 +852,66 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     ctx.fillText(displayTitle, 40, legendY + 60);
 
     // Dessiner les éléments de la légende
-    const entitiesArray = Array.from(activeEntities);
-    const itemsPerRow = 5;
-    const itemWidth = finalSize / itemsPerRow;
-    const startY = legendY + 130;
-    const rowHeight = 55;
+// Dessiner les éléments de la légende (alignés à gauche)
+const entitiesArray = Array.from(activeEntities);
 
-    entitiesArray.forEach((entityName, index) => {
-      const col = index % itemsPerRow;
-      const row = Math.floor(index / itemsPerRow);
-      const x = col * itemWidth + itemWidth / 2;
-      const y = startY + row * rowHeight;
+// layout
+const leftMargin = 40;         // même marge que le titre
+const rightMargin = 40;
+const itemsPerRow = 5;
+const colWidth = (finalSize - leftMargin - rightMargin) / itemsPerRow;
 
-      // Dessiner le point exactement comme sur la carte
-      const color = entityColors.get(entityName) || "#2ea76b";
-      const centerX = x - 110;
-      const centerY = y;
-      const radius = 15; // 22px de diamètre comme sur la carte
+const startY = legendY + 130;
+const rowHeight = 55;
 
-      // Cercle de couleur
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.fill();
+// style
+const radius = 15;
+const dotGap = 12;
 
-      // Bordure blanche intérieure (simule le box-shadow inset)
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius - 1, 0, Math.PI * 2);
-      ctx.stroke();
+// ⚠️ ton "60px Arial" est énorme pour une légende.
+// Mets une taille réaliste (ex: 24–30px) pour éviter les débordements.
+ctx.font = '28px Arial';
+ctx.textAlign = 'left';
+ctx.textBaseline = 'middle';
 
-      // Bordure noire extérieure (simule le box-shadow externe)
-      ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.stroke();
+entitiesArray.forEach((entityName, index) => {
+  const col = index % itemsPerRow;
+  const row = Math.floor(index / itemsPerRow);
 
-      // Texte de l'entité
-      ctx.fillStyle = '#000';
-      ctx.font = '60px Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(entityName, centerX + radius + 12, centerY);
-    });
+  const x0 = leftMargin + col * colWidth;  // ancrage gauche de la colonne
+  const y  = startY + row * rowHeight;
+
+  // point (aligné à gauche dans la colonne)
+  const dotX = x0 + radius;
+  const dotY = y;
+
+  const color = entityColors.get(entityName) || "#2ea76b";
+
+  // Cercle de couleur
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, radius, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Bordure blanche intérieure
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, radius - 1, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Bordure noire extérieure
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, radius, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Texte (juste à droite du point)
+  ctx.fillStyle = '#000';
+  ctx.fillText(entityName, dotX + radius + dotGap, dotY);
+});
+
 
     // Supprimer le message de chargement
     document.body.removeChild(loadingMsg);
