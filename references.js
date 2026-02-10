@@ -63,9 +63,16 @@ function refIsDromCoord(lat, lon) {
 
 function refInitDromMaps(containerId) {
   const container = document.getElementById(containerId);
-  if (!container) return;
+  if (!container) {
+    console.log('[REF DROM] Container not found:', containerId);
+    return;
+  }
 
-  refDromMaps.forEach(m => m.remove());
+  console.log('[REF DROM] Initializing DROM maps in container:', containerId);
+
+  refDromMaps.forEach(m => {
+    try { m.map.remove(); } catch(e) {}
+  });
   refDromMaps = [];
   refDromLayers = [];
   container.innerHTML = '';
@@ -87,42 +94,56 @@ function refInitDromMaps(containerId) {
     inset.appendChild(label);
     container.appendChild(inset);
 
-    const miniMap = L.map(mapDiv.id, {
-      zoomControl: false,
-      attributionControl: false,
-      dragging: false,
-      scrollWheelZoom: false,
-      doubleClickZoom: false,
-      boxZoom: false,
-      keyboard: false,
-      touchZoom: false
-    }).setView(drom.center, drom.zoom);
+    // Create mini Leaflet map after DOM insertion
+    setTimeout(() => {
+      const miniMap = L.map(mapDiv.id, {
+        zoomControl: false,
+        attributionControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        boxZoom: false,
+        keyboard: false,
+        touchZoom: false
+      }).setView(drom.center, drom.zoom);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19
-    }).addTo(miniMap);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19
+      }).addTo(miniMap);
 
-    const layer = L.layerGroup().addTo(miniMap);
+      const layer = L.layerGroup().addTo(miniMap);
 
-    refDromMaps.push({ map: miniMap, config: drom, inset, layer });
-    refDromLayers.push(layer);
+      refDromMaps.push({ map: miniMap, config: drom, inset, layer });
+      refDromLayers.push(layer);
+
+      // Invalidate size to ensure proper rendering
+      setTimeout(() => miniMap.invalidateSize(), 100);
+    }, 50);
   });
+
+  console.log('[REF DROM] Created', REF_DROM_CONFIGS.length, 'DROM inset maps');
 }
 
 function refAddDromMarker(dromIndex, lat, lon, color, clickHandler) {
-  if (dromIndex < 0 || dromIndex >= refDromMaps.length) return;
+  if (dromIndex < 0 || dromIndex >= refDromMaps.length) {
+    console.log('[REF DROM] Invalid dromIndex:', dromIndex, 'or maps not ready');
+    return;
+  }
 
   const { map, inset, layer } = refDromMaps[dromIndex];
+  console.log('[REF DROM] Adding marker to', REF_DROM_CONFIGS[dromIndex].name, 'at', lat, lon);
 
   if (inset.style.display === 'none') {
     inset.style.display = 'block';
+    console.log('[REF DROM] Showing inset for', REF_DROM_CONFIGS[dromIndex].name);
   }
 
   const icon = L.divIcon({
     className: 'person-marker',
-    html: `<span style="display:block; width:18px; height:18px; border-radius:50%;
+    html: `<span style="display:block; width:12px; height:12px; border-radius:50%;
       background:${color};
-      box-shadow:0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);"></span>`,
+      border: 3px solid rgba(255,255,255,.95);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.45);"></span>`,
     iconSize: [18, 18]
   });
 
@@ -319,9 +340,17 @@ function refAddMarkers() {
   refMarkers = [];
   if (!refMarkersLayer) return;
 
-  // Clear DROM layers
-  refDromLayers.forEach(layer => layer.clearLayers());
-  refDromMaps.forEach(({ inset }) => { inset.style.display = 'none'; });
+  // Clear DROM layers (if they exist)
+  if (refDromLayers && refDromLayers.length > 0) {
+    refDromLayers.forEach(layer => {
+      try { layer.clearLayers(); } catch(e) {}
+    });
+  }
+  if (refDromMaps && refDromMaps.length > 0) {
+    refDromMaps.forEach(({ inset }) => {
+      if (inset) inset.style.display = 'none';
+    });
+  }
 
   references.forEach((ref) => {
     const color = refCompanyColors.get(ref.entite) || "#2ea76b";
@@ -339,9 +368,10 @@ function refAddMarkers() {
       // Add to main map
       const icon = L.divIcon({
         className: 'person-marker',
-        html: `<span style="display:block; width:18px; height:18px; border-radius:50%;
+        html: `<span style="display:block; width:12px; height:12px; border-radius:50%;
           background:${color};
-          box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
+          border: 3px solid rgba(255,255,255,.95);
+          box-shadow: 0 0 0 1px rgba(0,0,0,.45);
           "></span>`,
         iconSize: [18, 18]
       });
@@ -708,11 +738,12 @@ function refExportJPG() {
 
     const dot = document.createElement("div");
     dot.style.cssText = `
-      width: 18px;
-      height: 18px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
       background: ${color};
-      box-shadow: 0 0 0 2px rgba(255,255,255,.95) inset, 0 0 0 1px rgba(0,0,0,.45);
+      border: 3px solid rgba(255,255,255,.95);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.45);
       flex-shrink: 0;
     `;
 
@@ -790,9 +821,13 @@ async function initReferences() {
     // 3. Setup UI
     const companies = refComputePalette(references);
     refRenderCompanyChips(companies);
-    refAddMarkers();
-    refRenderList(references);
-    refApplyFilters();
+
+    // Wait for DROM maps to be initialized before adding markers
+    setTimeout(() => {
+      refAddMarkers();
+      refRenderList(references);
+      refApplyFilters();
+    }, 200);
 
     // 4. Event listeners
     const refSearchInput = document.getElementById("refSearch");
