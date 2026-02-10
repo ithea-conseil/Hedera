@@ -661,6 +661,174 @@ function matchesQuery(p, tks){
   return tks.every(t => hay.includes(t));
 }
 
+/* Export Excel */
+function exportAnnuaireExcel() {
+  if (!window.XLSX) {
+    alert("Bibliothèque XLSX absente");
+    return;
+  }
+
+  const searchInput = document.getElementById("search");
+  const rawQuery = (searchInput.value || "").trim();
+  const tks = tokens(rawQuery);
+
+  const filtered = people.filter(p => {
+    if (!activeCompanies.has(p.entite)) return false;
+    if (!tks.length) return true;
+    const hay = norm([p.nom, p.prenom, p.entite, p.poste, p.email, p.tel, p.competences].join(" "));
+    return tks.every(t => hay.includes(t));
+  });
+
+  const exportData = filtered.map(p => ({
+    "Nom": p.nom,
+    "Prénom": p.prenom,
+    "Entité": p.entite,
+    "Poste": p.poste,
+    "Ville": p.ville,
+    "Email": p.email,
+    "Téléphone": p.tel,
+    "Compétences": p.competences
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Annuaire");
+
+  // Nom de fichier avec date
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const slug = (str) => {
+    return String(str || "")
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9-_]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+  };
+
+  const parts = ["annuaire"];
+  if (rawQuery) parts.push(slug(rawQuery));
+  parts.push(dateStr);
+
+  const fname = `${parts.join("_")}.xlsx`;
+  XLSX.writeFile(wb, fname);
+}
+
+/* Export JPG */
+function exportMapJPG(mapId, title) {
+  if (!window.html2canvas) {
+    alert("Bibliothèque html2canvas absente");
+    return;
+  }
+
+  const mapElement = document.getElementById(mapId);
+  if (!mapElement) {
+    alert("Carte non trouvée");
+    return;
+  }
+
+  // Créer un overlay avec titre et légende
+  const overlay = document.createElement("div");
+  overlay.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 9999;
+  `;
+
+  // Titre en haut
+  const titleDiv = document.createElement("div");
+  titleDiv.style.cssText = `
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    font-size: 18px;
+    font-weight: bold;
+    color: #0c0f0e;
+  `;
+  titleDiv.textContent = title;
+  overlay.appendChild(titleDiv);
+
+  // Légende en bas
+  const legendDiv = document.createElement("div");
+  legendDiv.style.cssText = `
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    max-width: 90%;
+  `;
+
+  // Ajouter les entités actives avec leurs couleurs
+  activeCompanies.forEach(company => {
+    const color = companyColors.get(company) || '#2ea76b';
+    const item = document.createElement("div");
+    item.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    `;
+
+    const dot = document.createElement("div");
+    dot.style.cssText = `
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: ${color};
+      border: 2px solid rgba(0,0,0,0.2);
+    `;
+
+    const label = document.createElement("span");
+    label.style.cssText = `
+      font-size: 12px;
+      color: #0c0f0e;
+      font-weight: 500;
+    `;
+    label.textContent = company;
+
+    item.appendChild(dot);
+    item.appendChild(label);
+    legendDiv.appendChild(item);
+  });
+
+  overlay.appendChild(legendDiv);
+  mapElement.appendChild(overlay);
+
+  // Capturer la carte avec overlay
+  html2canvas(mapElement, {
+    useCORS: true,
+    allowTaint: true,
+    backgroundColor: '#0c0f0e',
+    scale: 2
+  }).then(canvas => {
+    // Supprimer l'overlay
+    overlay.remove();
+
+    // Télécharger l'image
+    const link = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    link.download = `${title.toLowerCase().replace(/\s+/g, '_')}_${dateStr}.jpg`;
+    link.href = canvas.toDataURL('image/jpeg', 0.95);
+    link.click();
+  }).catch(err => {
+    overlay.remove();
+    console.error("Erreur lors de l'export JPG:", err);
+    alert("Erreur lors de l'export de la carte");
+  });
+}
+
 /* Bootstrap */
 async function main(){
   initMap();
@@ -694,6 +862,10 @@ async function main(){
     const collapsed = document.body.classList.toggle("panel-collapsed");
     toggle.textContent = collapsed ? "⟨" : "⟩";
   });
+
+  // Export buttons
+  $("#annuaireExportExcel").addEventListener("click", exportAnnuaireExcel);
+  $("#annuaireExportJPG").addEventListener("click", () => exportMapJPG("map", "Annuaire"));
 
   $("#modalClose").addEventListener("click", ()=> $("#modal").classList.add("hidden"));
   $("#modal").addEventListener("click", (e)=>{

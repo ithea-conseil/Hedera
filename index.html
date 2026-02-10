@@ -19,6 +19,9 @@
   <!-- Export Excel (utilisé par veille.js et references.js) -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+  <!-- Export JPG (pour capture de carte) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
   <style>
   .info-wrapper {
     position: relative;
@@ -210,6 +213,10 @@
           <div class="brand">
             <h1>Annuaire</h1>
           </div>
+          <div class="export-buttons">
+            <button id="annuaireExportExcel" class="export-btn" title="Exporter en Excel">Export Excel</button>
+            <button id="annuaireExportJPG" class="export-btn" title="Exporter la carte en JPG">Export JPG</button>
+          </div>
         </header>
 
         <section class="controls">
@@ -245,6 +252,10 @@
         <header class="panel-header">
           <div class="brand">
             <h1>Références</h1>
+          </div>
+          <div class="export-buttons">
+            <button id="refExportExcel" class="export-btn" title="Exporter en Excel">Export Excel</button>
+            <button id="refExportJPG" class="export-btn" title="Exporter la carte en JPG">Export JPG</button>
           </div>
         </header>
 
