@@ -125,11 +125,12 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize){
 function reflowJitter(){
   if (!markersLayer || !map) return;
   const visibleIdx = markersLayer.__visibleIdx || [];
-  // Regroupe les personnes visibles par coordonnées exactes (à ~1e-5° près)
+  // Regroupe les personnes visibles par coordonnées proches (à ~1e-3° près, soit ~100m)
+  // Réduction de la précision de 5 à 3 pour grouper les points visuellement superposés
   const groups = new Map(); // key -> [indices]
   visibleIdx.forEach((idx)=>{
     const p = people[idx];
-    const key = `${(+p.lat).toFixed(5)},${(+p.lon).toFixed(5)}`;
+    const key = `${(+p.lat).toFixed(3)},${(+p.lon).toFixed(3)}`;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(idx);
   });
