@@ -764,7 +764,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Dimensions du canvas final (2000x2000 carré)
     const finalSize = 2000;
-    const legendHeight = 220;
+    const legendHeight = 300;
     const mapHeight = finalSize - legendHeight;
 
     // Titres professionnels selon la section
@@ -847,16 +847,16 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Titre de la légende (aligné à gauche)
     ctx.fillStyle = '#000';
-    ctx.font = 'bold 36px Arial';
+    ctx.font = 'bold 42px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText(displayTitle, 40, legendY + 50);
+    ctx.fillText(displayTitle, 40, legendY + 60);
 
     // Dessiner les éléments de la légende
     const entitiesArray = Array.from(activeEntities);
     const itemsPerRow = 4;
     const itemWidth = finalSize / itemsPerRow;
-    const startY = legendY + 110;
-    const rowHeight = 45;
+    const startY = legendY + 130;
+    const rowHeight = 55;
 
     entitiesArray.forEach((entityName, index) => {
       const col = index % itemsPerRow;
@@ -892,10 +892,10 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
       // Texte de l'entité
       ctx.fillStyle = '#000';
-      ctx.font = '22px Arial';
+      ctx.font = '28px Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.fillText(entityName, centerX + radius + 10, centerY);
+      ctx.fillText(entityName, centerX + radius + 12, centerY);
     });
 
     // Supprimer le message de chargement
