@@ -892,7 +892,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
       // Texte de l'entité
       ctx.fillStyle = '#000';
-      ctx.font = '40px Arial';
+      ctx.font = '60px Arial';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.fillText(entityName, centerX + radius + 12, centerY);
