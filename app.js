@@ -769,9 +769,9 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
 
     // Titres professionnels selon la section
     const professionalTitles = {
-      'annuaire': 'Cartographie des Collaborateurs',
-      'references': 'Cartographie des Références',
-      'veille': 'Cartographie de la Veille Concurrentielle'
+      'annuaire': 'Cartographie des membres du groupe Hedera',
+      'references': 'Cartographie des références du groupe Hedera',
+      'veille': 'Veille concurrentielle'
     };
     const displayTitle = professionalTitles[sectionName] || sectionName;
 
