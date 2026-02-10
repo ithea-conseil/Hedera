@@ -125,12 +125,17 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize){
 function reflowJitter(){
   if (!markersLayer || !map) return;
   const visibleIdx = markersLayer.__visibleIdx || [];
-  // Regroupe les personnes visibles par coordonnées proches (à ~1e-3° près, soit ~100m)
-  // Réduction de la précision de 5 à 3 pour grouper les points visuellement superposés
+  
+  // Regroupe les personnes visibles par coordonnées proches.
+  // Modification : Tolérance augmentée à ~0.05° (environ 5.5km) au lieu de 0.001°
   const groups = new Map(); // key -> [indices]
   visibleIdx.forEach((idx)=>{
     const p = people[idx];
-    const key = `${(+p.lat).toFixed(3)},${(+p.lon).toFixed(3)}`;
+    // On utilise Math.round(coord * 20) pour arrondir au 0.05 près
+    const latKey = Math.round(p.lat * 20);
+    const lonKey = Math.round(p.lon * 20);
+    const key = `${latKey},${lonKey}`;
+    
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(idx);
   });
@@ -138,8 +143,10 @@ function reflowJitter(){
   // Met à jour la position de chaque marker selon son rang dans le groupe
   markersLayer.clearLayers();
   for (const [key, arr] of groups){
-    const [lat, lon] = key.split(',').map(Number);
-    const base = L.latLng(lat, lon);
+    // Pour la base du cluster visuel, on prend la position réelle du premier membre
+    const firstP = people[arr[0]];
+    const base = L.latLng(firstP.lat, firstP.lon);
+    
     const n = arr.length;
     arr.forEach((idx, k)=>{
       const m = markers[idx];
@@ -743,7 +750,7 @@ async function annuaireExportJpg() {
 }
 
 /* Fonction générique d'export JPG */
-async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors, mapElementId) {
+async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors, mapElementId, customTitle = null) {
   try {
     if (!window.domtoimage) {
       alert("Bibliothèque dom-to-image absente");
@@ -785,14 +792,11 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
       zoomControl.style.display = 'none';
     }
 
-    const mapDataUrl = await domtoimage.toPng(mapElement, {
-      width: mapElement.offsetWidth,
-      height: mapElement.offsetHeight,
-      style: {
-        transform: 'scale(1)',
-        transformOrigin: 'top left'
-      }
-    });
+		const mapDataUrl = await domtoimage.toPng(mapElement, {
+			width: mapElement.offsetWidth,
+			height: mapElement.offsetHeight,
+			style: { transform: 'scale(1)', transformOrigin: 'top left' }
+		});
 
     // Réafficher les contrôles de zoom
     if (zoomControl && !wasHidden) {
@@ -837,7 +841,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
       srcY = (mapImage.height - srcHeight) / 2;
     }
 
-    // Dessiner la carte principale (crop et plein écran)
+// Dessiner la carte principale (crop et plein écran)
     ctx.drawImage(mapImage, srcX, srcY, srcWidth, srcHeight, 0, 0, finalSize, mapHeight);
 
     // Dessiner la légende en bas
@@ -847,72 +851,69 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, legendY, finalSize, legendHeight);
 
+    // Titres professionnels selon la section
+    const professionalTitles = {
+      'annuaire': 'Cartographie des membres du groupe Hedera',
+      'references': 'Cartographie des références du groupe Hedera',
+      'veille': 'Veille concurrentielle'
+    };
+    // Priorité au titre personnalisé, sinon mapping, sinon nom de section
+    const displayTitle = customTitle || professionalTitles[sectionName] || sectionName;
+
     // Titre de la légende (aligné à gauche)
     ctx.fillStyle = '#000';
     ctx.font = 'bold 42px Arial';
     ctx.textAlign = 'left';
     ctx.fillText(displayTitle, 40, legendY + 60);
 
-    // Dessiner les éléments de la légende
-// Dessiner les éléments de la légende (alignés à gauche)
-const entitiesArray = Array.from(activeEntities);
+    // Modification : On ne dessine la légende que si ce n'est PAS la section 'veille'
+    if (sectionName !== 'veille') {
+        const entitiesArray = Array.from(activeEntities);
 
-// layout
-const leftMargin = 40;         // même marge que le titre
-const rightMargin = 40;
-const itemsPerRow = 5;
-const colWidth = (finalSize - leftMargin - rightMargin) / itemsPerRow;
+        // Layout modifié : plus d'espace pour éviter les chevauchements
+        const leftMargin = 40;
+        const rightMargin = 40;
+        const itemsPerRow = 3; // Réduit de 5 à 3 colonnes
+        const colWidth = (finalSize - leftMargin - rightMargin) / itemsPerRow;
 
-const startY = legendY + 130;
-const rowHeight = 55;
+        const startY = legendY + 130;
+        const rowHeight = 55;
 
-// style
-const radius = 15;
-const dotGap = 12;
+        const radius = 15;
+        const dotGap = 12;
 
-// ⚠️ ton "60px Arial" est énorme pour une légende.
-// Mets une taille réaliste (ex: 24–30px) pour éviter les débordements.
-ctx.font = '28px Arial';
-ctx.textAlign = 'left';
-ctx.textBaseline = 'middle';
+        ctx.font = '24px Arial'; // Police légèrement réduite
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
 
-entitiesArray.forEach((entityName, index) => {
-  const col = index % itemsPerRow;
-  const row = Math.floor(index / itemsPerRow);
+        entitiesArray.forEach((entityName, index) => {
+          const col = index % itemsPerRow;
+          const row = Math.floor(index / itemsPerRow);
 
-  const x0 = leftMargin + col * colWidth;  // ancrage gauche de la colonne
-  const y  = startY + row * rowHeight;
+          const x0 = leftMargin + col * colWidth;
+          const y  = startY + row * rowHeight;
 
-  // point (aligné à gauche dans la colonne)
-  const dotX = x0 + radius;
-  const dotY = y;
+          const dotX = x0 + radius;
+          const dotY = y;
 
-  const color = entityColors.get(entityName) || "#2ea76b";
+          const color = entityColors.get(entityName) || "#2ea76b";
 
-  // Cercle de couleur
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(dotX, dotY, radius, 0, Math.PI * 2);
-  ctx.fill();
+          // Cercle
+          ctx.fillStyle = color;
+          ctx.beginPath(); ctx.arc(dotX, dotY, radius, 0, Math.PI * 2); ctx.fill();
+          
+          // Bordures
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)'; ctx.lineWidth = 2;
+          ctx.beginPath(); ctx.arc(dotX, dotY, radius - 1, 0, Math.PI * 2); ctx.stroke();
+          
+          ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)'; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(dotX, dotY, radius, 0, Math.PI * 2); ctx.stroke();
 
-  // Bordure blanche intérieure
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(dotX, dotY, radius - 1, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Bordure noire extérieure
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.45)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(dotX, dotY, radius, 0, Math.PI * 2);
-  ctx.stroke();
-
-  // Texte (juste à droite du point)
-  ctx.fillStyle = '#000';
-  ctx.fillText(entityName, dotX + radius + dotGap, dotY);
-});
+          // Texte
+          ctx.fillStyle = '#000';
+          ctx.fillText(entityName, dotX + radius + dotGap, dotY);
+        });
+    }
 
 
     // Supprimer le message de chargement
@@ -926,10 +927,9 @@ entitiesArray.forEach((entityName, index) => {
     link.href = dataUrl;
     link.click();
 
-  } catch (error) {
+  } } catch (error) {
     console.error("Erreur lors de l'export JPG:", error);
     alert("Erreur lors de l'export JPG: " + error.message);
-    // Supprimer le message de chargement si présent
     const loadingMsg = document.querySelector('div[style*="Génération"]');
     if (loadingMsg) document.body.removeChild(loadingMsg);
   }
