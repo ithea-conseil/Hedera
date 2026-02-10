@@ -891,25 +891,6 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     link.href = dataUrl;
     link.click();
 
-      // Texte de l'entité
-      ctx.fillStyle = '#000';
-      ctx.font = '16px Arial';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(entityName, x - 82, y);
-    });
-
-    // Supprimer le message de chargement
-    document.body.removeChild(loadingMsg);
-
-    // Télécharger
-    const dataUrl = finalCanvas.toDataURL('image/jpeg', 0.95);
-    const link = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    link.download = `${sectionName}_${dateStr}.jpg`;
-    link.href = dataUrl;
-    link.click();
-
   } catch (error) {
     console.error("Erreur lors de l'export JPG:", error);
     alert("Erreur lors de l'export JPG: " + error.message);
