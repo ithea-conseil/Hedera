@@ -386,31 +386,47 @@ function exportExcel(){
 }
 
 /* Export JPG pour Veille */
+/* Export JPG pour Veille */
 async function veilleExportJpg() {
   if (!window.domtoimage) {
     alert("Bibliothèque dom-to-image absente");
     return;
   }
 
-  // Pour la veille, on utilise les entités visibles dans les résultats
-  const veilleActiveEntities = new Set();
-  const veilleEntityColors = new Map();
-
-  currentRows.forEach(row => {
-    if (row.titulaire_nom) {
-      veilleActiveEntities.add(row.titulaire_nom);
-      // Générer une couleur unique pour chaque titulaire
-      if (!veilleEntityColors.has(row.titulaire_nom)) {
-        const colors = ["#1DB5C5","#70BA7A","#EE2528","#F38331","#5C368D","#F9B832","#2ea76b"];
-        const index = veilleEntityColors.size % colors.length;
-        veilleEntityColors.set(row.titulaire_nom, colors[index]);
-      }
-    }
+  // 1. Construction du titre dynamique
+  const rawSearch = ((V_SEARCH && V_SEARCH.value) || "").trim();
+  
+  // On regarde quels titulaires sont affichés pour potentiellement utiliser le nom
+  const awardeeSet = new Set();
+  currentRows.forEach(r => {
+    const name = (r.titulaire_nom || "").trim();
+    if (name) awardeeSet.add(name);
   });
+  const uniqueAwardees = Array.from(awardeeSet);
 
-  // Utiliser la fonction générique d'export depuis app.js
+  let titleSuffix = "";
+  if (rawSearch) {
+    titleSuffix = ` : ${rawSearch}`;
+  } else if (uniqueAwardees.length === 1) {
+    titleSuffix = ` : ${uniqueAwardees[0]}`;
+  }
+
+  const dynamicTitle = `Veille concurrentielle${titleSuffix}`;
+
+  // 2. Appel de l'export
+  // On passe des sets vides car la légende est désactivée pour 'veille' dans app.js
+  const dummySet = new Set();
+  const dummyMap = new Map();
+
   if (window.exportMapAsJpg && veilleMap) {
-    await window.exportMapAsJpg(veilleMap, "veille", veilleActiveEntities, veilleEntityColors, "veilleMap");
+    await window.exportMapAsJpg(
+      veilleMap, 
+      "veille", 
+      dummySet, 
+      dummyMap, 
+      "veilleMap", 
+      dynamicTitle // <-- Titre personnalisé
+    );
   } else {
     alert("Fonction d'export JPG non disponible ou carte non initialisée");
   }
@@ -528,3 +544,4 @@ function initVeille(){
 }
 
 document.addEventListener("DOMContentLoaded", initVeille);
+
