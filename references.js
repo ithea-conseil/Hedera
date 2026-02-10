@@ -566,14 +566,12 @@ async function initReferences() {
       });
     }
 
-    // 5. Add export button (Excel)
-    const exportBtn = document.createElement("button");
-    exportBtn.className = "soft";
-    exportBtn.textContent = "Exporter Excel";
-    exportBtn.addEventListener("click", refExportExcel);
-    document.querySelector("#refPanel .filters-head").appendChild(exportBtn);
+    // 5. Hook up Export buttons
+    const refExportExcelBtn = document.getElementById("refExportExcel");
+    if (refExportExcelBtn) {
+      refExportExcelBtn.addEventListener("click", refExportExcel);
+    }
 
-    // 6. Hook up JPG export button
     const refExportJpgBtn = document.getElementById("refExportJpg");
     if (refExportJpgBtn) {
       refExportJpgBtn.addEventListener("click", refExportJpg);
