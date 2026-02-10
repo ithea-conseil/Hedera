@@ -776,14 +776,6 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     const legendHeight = 300;
     const mapHeight = finalSize - legendHeight;
 
-    // Titres professionnels selon la section
-    const professionalTitles = {
-      'annuaire': 'Cartographie des membres du groupe Hedera',
-      'references': 'Cartographie des références du groupe Hedera',
-      'veille': 'Veille concurrentielle'
-    };
-    const displayTitle = professionalTitles[sectionName] || sectionName;
-
     // Cacher temporairement les contrôles de zoom
     const mapElement = document.getElementById(mapElementId);
     const zoomControl = mapElement.querySelector('.leaflet-control-zoom');
@@ -927,7 +919,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     link.href = dataUrl;
     link.click();
 
-  } } catch (error) {
+  } catch (error) {
     console.error("Erreur lors de l'export JPG:", error);
     alert("Erreur lors de l'export JPG: " + error.message);
     const loadingMsg = document.querySelector('div[style*="Génération"]');
