@@ -512,14 +512,14 @@ function refExportExcel() {
 
 /* Export JPG pour Références */
 async function refExportJpg() {
-  if (!window.html2canvas) {
-    alert("Bibliothèque html2canvas absente");
+  if (!window.domtoimage) {
+    alert("Bibliothèque dom-to-image absente");
     return;
   }
 
   // Utiliser la fonction générique d'export depuis app.js
   if (window.exportMapAsJpg) {
-    await window.exportMapAsJpg(refMap, "references", refActiveCompanies, refCompanyColors);
+    await window.exportMapAsJpg(refMap, "references", refActiveCompanies, refCompanyColors, "refMap");
   } else {
     alert("Fonction d'export JPG non disponible");
   }
