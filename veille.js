@@ -387,8 +387,8 @@ function exportExcel(){
 
 /* Export JPG pour Veille */
 async function veilleExportJpg() {
-  if (!window.html2canvas) {
-    alert("Bibliothèque html2canvas absente");
+  if (!window.domtoimage) {
+    alert("Bibliothèque dom-to-image absente");
     return;
   }
 
@@ -410,7 +410,7 @@ async function veilleExportJpg() {
 
   // Utiliser la fonction générique d'export depuis app.js
   if (window.exportMapAsJpg && veilleMap) {
-    await window.exportMapAsJpg(veilleMap, "veille", veilleActiveEntities, veilleEntityColors);
+    await window.exportMapAsJpg(veilleMap, "veille", veilleActiveEntities, veilleEntityColors, "veilleMap");
   } else {
     alert("Fonction d'export JPG non disponible ou carte non initialisée");
   }

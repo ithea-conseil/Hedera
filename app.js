@@ -732,19 +732,19 @@ function annuaireExportExcel() {
 
 /* Export JPG pour Annuaire */
 async function annuaireExportJpg() {
-  if (!window.html2canvas) {
-    alert("Bibliothèque html2canvas absente");
+  if (!window.domtoimage) {
+    alert("Bibliothèque dom-to-image absente");
     return;
   }
 
-  await exportMapAsJpg(map, "annuaire", activeCompanies, companyColors);
+  await exportMapAsJpg(map, "annuaire", activeCompanies, companyColors, "map");
 }
 
 /* Fonction générique d'export JPG avec support DROM */
-async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors) {
+async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityColors, mapElementId) {
   try {
-    if (!window.leafletImage) {
-      alert("Bibliothèque leaflet-image absente");
+    if (!window.domtoimage) {
+      alert("Bibliothèque dom-to-image absente");
       return;
     }
 
@@ -770,12 +770,23 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     const dromBoxHeight = 240;
     const mapHeight = finalHeight - legendHeight;
 
-    // Capturer la carte principale avec leaflet-image
-    const mapCanvas = await new Promise((resolve, reject) => {
-      leafletImage(mapInstance, (err, canvas) => {
-        if (err) reject(err);
-        else resolve(canvas);
-      });
+    // Capturer la carte principale avec dom-to-image
+    const mapElement = document.getElementById(mapElementId);
+    const mapDataUrl = await domtoimage.toPng(mapElement, {
+      width: mapElement.offsetWidth,
+      height: mapElement.offsetHeight,
+      style: {
+        transform: 'scale(1)',
+        transformOrigin: 'top left'
+      }
+    });
+
+    // Créer une image depuis le dataURL
+    const mapImage = new Image();
+    await new Promise((resolve, reject) => {
+      mapImage.onload = resolve;
+      mapImage.onerror = reject;
+      mapImage.src = mapDataUrl;
     });
 
     // Créer le canvas final
@@ -791,7 +802,7 @@ async function exportMapAsJpg(mapInstance, sectionName, activeEntities, entityCo
     // Dessiner la carte principale (à droite des DROM)
     const mapX = dromWidth + 20;
     const mapWidth = finalWidth - mapX;
-    ctx.drawImage(mapCanvas, mapX, 0, mapWidth, mapHeight);
+    ctx.drawImage(mapImage, mapX, 0, mapWidth, mapHeight);
 
     // Collecter les données DROM depuis la carte
     const dromRegions = [
