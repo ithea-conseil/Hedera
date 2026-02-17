@@ -127,14 +127,13 @@ function simpleTipText(p){
 
 // Décalage (en pixels) converti en LatLng selon le zoom courant.
 // Répartition en "anneaux hexagonaux" : 6, 12, 18, ... par anneau.
-function jitterLatLng(baseLatLng, indexInGroup, groupSize){
-  const zoom = map.getZoom();
+function jitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
+  if (zoom === undefined) zoom = map.getZoom();
   // Amplitude du jitter en px (augmentée pour mieux séparer les marqueurs)
-  // Formule: plus on est dézoomé, plus l'écartement est grand
   const basePx = Math.max(0, Math.min(18, (14 + zoom) * 2 + 4))
   if (groupSize <= 1 || basePx === 0) return baseLatLng;
 
-  // Trouver l’anneau et la position dans l’anneau (6, 12, 18, ...)
+  // Trouver l'anneau et la position dans l'anneau (6, 12, 18, ...)
   let ring = 0, used = 0, cap = 6;
   while (indexInGroup >= used + cap){
     used += cap;
@@ -152,21 +151,27 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize){
   return map.layerPointToLatLng(p2);
 }
 
+// Debounce reflow pour éviter de recalculer à chaque tick de zoom
+let _reflowTimer;
+function reflowJitterDebounced(){
+  clearTimeout(_reflowTimer);
+  _reflowTimer = setTimeout(reflowJitter, 120);
+}
+
 // Recalcule et réapplique la position décalée (jitter) des marqueurs visibles
 function reflowJitter(){
   if (!markersLayer || !map) return;
   const visibleIdx = markersLayer.__visibleIdx || [];
-  
+  const zoom = map.getZoom(); // cache le zoom une seule fois
+
   // Regroupe les personnes visibles par coordonnées proches.
-  // Modification : Tolérance augmentée à ~0.05° (environ 5.5km) au lieu de 0.001°
   const groups = new Map(); // key -> [indices]
   visibleIdx.forEach((idx)=>{
     const p = people[idx];
-    // On utilise Math.round(coord * 20) pour arrondir au 0.05 près
     const latKey = Math.round(p.lat * 20);
     const lonKey = Math.round(p.lon * 20);
     const key = `${latKey},${lonKey}`;
-    
+
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(idx);
   });
@@ -174,14 +179,13 @@ function reflowJitter(){
   // Met à jour la position de chaque marker selon son rang dans le groupe
   markersLayer.clearLayers();
   for (const [key, arr] of groups){
-    // Pour la base du cluster visuel, on prend la position réelle du premier membre
     const firstP = people[arr[0]];
     const base = L.latLng(firstP.lat, firstP.lon);
-    
+
     const n = arr.length;
     arr.forEach((idx, k)=>{
       const m = markers[idx];
-      const j = jitterLatLng(base, k, n);
+      const j = jitterLatLng(base, k, n, zoom);
       m.setLatLng(j);
       markersLayer.addLayer(m);
     });
@@ -191,18 +195,20 @@ function reflowJitter(){
 
 /* Map */
 function initMap(){
-  map = L.map("map", { zoomControl:false }).setView([46.71109, 1.7191036], 6);
+  map = L.map("map", { zoomControl:false, preferCanvas: true }).setView([46.71109, 1.7191036], 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
+    maxZoom: 19,
+    updateWhenZooming: false,
+    updateInterval: 200
   }).addTo(map);
   L.control.zoom({position:"bottomleft"}).addTo(map);
 
   // Calque simple qui affichera uniquement les marqueurs visibles (pas de cluster)
   markersLayer = L.layerGroup().addTo(map);
 
-  // À chaque zoom, on recalcule le jitter pour les marqueurs visibles
-  map.on('zoomend', reflowJitter);
+  // À chaque zoom, on recalcule le jitter (debounced)
+  map.on('zoomend', reflowJitterDebounced);
 }
 
 
@@ -839,16 +845,23 @@ function annuaireExportExcel() {
     return matchesQuery(p, tks);
   });
 
-  const exportData = filtered.map(p => ({
-    "Prénom": p.prenom,
-    "Nom": p.nom,
-    "Entité": p.entite,
-    "Poste": p.poste,
-    "Ville": p.ville,
-    "Téléphone": p.tel,
-    "Email": p.email,
-    "Compétences": p.competences
-  }));
+  // Include Domaine column only if at least one filtered item has a non-empty domaine
+  const hasDomaine = filtered.some(p => (p.domaine || "").trim() !== "");
+
+  const exportData = filtered.map(p => {
+    const row = {
+      "Prénom": p.prenom,
+      "Nom": p.nom,
+      "Entité": p.entite,
+      "Poste": p.poste,
+      "Ville": p.ville,
+      "Téléphone": p.tel,
+      "Email": p.email,
+      "Compétences": p.competences
+    };
+    if (hasDomaine) row["Domaine"] = p.domaine || "";
+    return row;
+  });
 
   const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();

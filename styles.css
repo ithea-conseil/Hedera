@@ -500,24 +500,24 @@ body.veille-collapsed #veillePanelToggle{ transform:none }
   border-color: rgba(255, 255, 255, 0.4);
 }
 
-/* For popup cards - slightly different style */
+/* For popup cards - green bg + black text */
 .popup-card .intitule-chip {
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(46, 167, 107, 0.5);
+  background: rgba(46, 167, 107, 0.15);
+  border-color: rgba(46, 167, 107, 0.4);
   color: #000;
-  font-weight: 600;
+  font-weight: 500;
 }
 
-/* For tooltips - compact and readable */
+/* For tooltips - compact and readable on white Leaflet tooltip bg */
 .leaflet-tooltip .intitule-chips {
   gap: 4px;
   margin-top: 0;
 }
 
 .leaflet-tooltip .intitule-chip {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.3);
-  color: #fff;
+  background: rgba(46, 167, 107, 0.15);
+  border-color: rgba(46, 167, 107, 0.4);
+  color: #1a1a1a;
   font-size: 10px;
   padding: 3px 8px;
 }

@@ -42,9 +42,9 @@ let refDomainsByEntity = new Map(); // Map<entite, Set<domaine>>
 let refMarkersLayer;
 
 // --- Jitter des marqueurs (répartition en anneaux hexagonaux) ---
-function refJitterLatLng(baseLatLng, indexInGroup, groupSize){
+function refJitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
   if (!refMap) return baseLatLng;
-  const zoom = refMap.getZoom();
+  if (zoom === undefined) zoom = refMap.getZoom();
   // amplitude en pixels (diminue quand on zoome)
   const basePx = Math.max(0, Math.min(18, (14 + zoom) * 2 + 4));
   if (groupSize <= 1 || basePx === 0) return baseLatLng;
@@ -67,10 +67,18 @@ function refJitterLatLng(baseLatLng, indexInGroup, groupSize){
   return refMap.layerPointToLatLng(p2);
 }
 
+// Debounce reflow pour éviter de recalculer à chaque tick de zoom
+let _refReflowTimer;
+function refReflowJitterDebounced(){
+  clearTimeout(_refReflowTimer);
+  _refReflowTimer = setTimeout(refReflowJitter, 120);
+}
+
 // Recalcule la position décalée des marqueurs visibles et les (ré)ajoute au layer
 function refReflowJitter(){
   if (!refMarkersLayer || !refMap) return;
   const visibleIdx = refMarkersLayer.__visibleIdx || [];
+  const zoom = refMap.getZoom(); // cache le zoom une seule fois
 
   // regroupe par coordonnées exactes (~1e-5°)
   const groups = new Map(); // "lat,lon" -> [indices]
@@ -89,7 +97,7 @@ function refReflowJitter(){
     arr.forEach((idx, k)=>{
       const m = refMarkers[idx];
       if (!m) return;
-      const j = refJitterLatLng(base, k, n);
+      const j = refJitterLatLng(base, k, n, zoom);
       m.setLatLng(j);
       refMarkersLayer.addLayer(m);
     });
@@ -169,16 +177,18 @@ function refComputeDomainsByEntity(items){
 /* Init Leaflet map for References */
 function initRefMap() {
   if (!refMap) {
-    refMap = L.map("refMap", { zoomControl: false }).setView([46.71109, 1.7191036], 6);
+    refMap = L.map("refMap", { zoomControl: false, preferCanvas: true }).setView([46.71109, 1.7191036], 6);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19
+      maxZoom: 19,
+      updateWhenZooming: false,
+      updateInterval: 200
     }).addTo(refMap);
     L.control.zoom({ position: "bottomleft" }).addTo(refMap);
     refMarkersLayer = L.layerGroup().addTo(refMap);
 
-    // Recalcule l’écartement quand on zoome/dézoome
-    refMap.on('zoomend', refReflowJitter);
+    // Recalcule l'écartement quand on zoome/dézoome (debounced)
+    refMap.on('zoomend', refReflowJitterDebounced);
 
     
     // Force l'invalidation de la taille après un court délai
@@ -609,18 +619,25 @@ function refExportExcel() {
     return tks.every(t => hay.includes(t));
   });
 
-  const exportData = filtered.map(r => ({
-    "Entité": r.entite,
-    "Intitulé mission": r.intitule,
-    "Territoire": r.territoire,
-    "Année": r.annee,
-    "Cheffe de projet": r.cheffe,
-    "Titre référent": r.titreReferent,
-    "Nom référent": r.nomReferent,
-    "Mail": r.mail,
-    "Tél": r.tel,
-    "Montant": r.montant
-  }));
+  // Include Domaine column only if at least one filtered item has a non-empty domaine
+  const hasDomaine = filtered.some(r => (r.domaine || "").trim() !== "");
+
+  const exportData = filtered.map(r => {
+    const row = {
+      "Entité": r.entite,
+      "Intitulé mission": r.intitule,
+      "Territoire": r.territoire,
+      "Année": r.annee,
+      "Cheffe de projet": r.cheffe,
+      "Titre référent": r.titreReferent,
+      "Nom référent": r.nomReferent,
+      "Mail": r.mail,
+      "Tél": r.tel,
+      "Montant": r.montant
+    };
+    if (hasDomaine) row["Domaine"] = r.domaine || "";
+    return row;
+  });
 
   const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();
