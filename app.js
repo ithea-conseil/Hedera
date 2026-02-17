@@ -46,6 +46,8 @@ let people = [];
 let markers = [];
 let activeCompanies = new Set();
 let companyColors = new Map();
+let activeDomains = new Set(); // Domaines actifs pour le filtrage
+let domainsByEntity = new Map(); // Map<entite, Set<domaine>>
 let currentPopupMarker = null;
 
 // nouveau :
@@ -87,7 +89,36 @@ function computePalette(items){
 
   return uniq;
 }
-// Texte simple pour l’étiquette hover
+
+/* Compute domains per entity */
+function computeDomainsByEntity(items){
+  const domainMap = new Map();
+
+  items.forEach(p => {
+    const entity = p.entite;
+    const domaineRaw = p.domaine || "";
+
+    if (!entity) return;
+
+    // Split domains by comma, semicolon, or pipe
+    const domains = domaineRaw
+      .split(/[,;|]+/)
+      .map(d => d.trim())
+      .filter(Boolean);
+
+    if (!domainMap.has(entity)) {
+      domainMap.set(entity, new Set());
+    }
+
+    domains.forEach(d => {
+      domainMap.get(entity).add(d);
+    });
+  });
+
+  return domainMap;
+}
+
+// Texte simple pour l'étiquette hover
 function simpleTipText(p){
   const nom = [p.prenom, p.nom].filter(Boolean).join(" ");
   return nom;
@@ -238,7 +269,7 @@ function normalizePeople(table){
     poste: pick(row, ["Poste occupé","Poste","Fonction"]),
     ville : pick(row, ["Zone géographique","Localité","Localite"]),
     competences: pick(row, ["Compétences clés","Compétences","Competences"]),
-
+    domaine: pick(row, ["Domaine","DOMAINE","Domaines"]),
 
     lat: parseNumber(pick(row, ["latitude","Lat","lat"])),
     lon: parseNumber(pick(row, ["longitude","Lon","lon","lng"]))
@@ -612,6 +643,10 @@ function renderCompanyChips(all){
   activeCompanies = new Set(all);
 
   all.forEach(name=>{
+    // Create container for chip + domain bubbles
+    const container = document.createElement("div");
+    container.className = "chip-container";
+
     const btn = document.createElement("button");
     btn.className = "chip active";
     btn.dataset.value = name;
@@ -640,11 +675,57 @@ function renderCompanyChips(all){
       applyFilters();
     });
 
-    wrap.appendChild(btn);
+    container.appendChild(btn);
+
+    // Add domain bubbles if entity has domains
+    const entityDomains = domainsByEntity.get(name);
+    if (entityDomains && entityDomains.size > 0) {
+      const domainsContainer = document.createElement("div");
+      domainsContainer.className = "domain-bubbles";
+
+      Array.from(entityDomains).forEach(domain => {
+        const domainBubble = document.createElement("button");
+        domainBubble.className = "domain-bubble";
+        domainBubble.textContent = domain;
+        domainBubble.dataset.domain = domain;
+
+        // Check if domain is active
+        if (activeDomains.has(domain)) {
+          domainBubble.classList.add("active");
+        }
+
+        domainBubble.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          toggleDomain(domain);
+        });
+
+        domainsContainer.appendChild(domainBubble);
+      });
+
+      container.appendChild(domainsContainer);
+    }
+
+    wrap.appendChild(container);
   });
 
   // état visuel initial : tout actif mais aspect "inactif"
   syncChipsAllState();
+}
+
+function toggleDomain(domain){
+  if (activeDomains.has(domain)) {
+    activeDomains.delete(domain);
+  } else {
+    activeDomains.add(domain);
+  }
+
+  // Update visual state of all domain bubbles
+  $$(".domain-bubble").forEach(bubble => {
+    const bubbleDomain = bubble.dataset.domain;
+    bubble.classList.toggle("active", activeDomains.has(bubbleDomain));
+  });
+
+  applyFilters();
 }
 
 
@@ -652,7 +733,30 @@ function applyFilters(){
   const q = $("#search").value || "";
   const tks = tokens(q);
 
-  const filtered = people.filter(p=> activeCompanies.has(p.entite) && matchesQuery(p, tks));
+  const filtered = people.filter(p=> {
+    // Filter by entity
+    if (!activeCompanies.has(p.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (activeDomains.size > 0) {
+      const entityDomains = domainsByEntity.get(p.entite);
+      if (!entityDomains || entityDomains.size === 0) return false;
+
+      // Check if entity has at least one of the active domains
+      let hasActiveDomain = false;
+      for (const domain of activeDomains) {
+        if (entityDomains.has(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
+    // Filter by search query
+    return matchesQuery(p, tks);
+  });
+
   renderList(filtered);
 
   // Mémorise quels indices sont visibles, puis applique jitter + ajout au layer
@@ -683,6 +787,22 @@ function annuaireExportExcel() {
 
   const filtered = people.filter(p => {
     if (!activeCompanies.has(p.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (activeDomains.size > 0) {
+      const entityDomains = domainsByEntity.get(p.entite);
+      if (!entityDomains || entityDomains.size === 0) return false;
+
+      let hasActiveDomain = false;
+      for (const domain of activeDomains) {
+        if (entityDomains.has(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
     return matchesQuery(p, tks);
   });
 
@@ -939,12 +1059,14 @@ async function main(){
   }
 
   const companies = computePalette(people);
+  domainsByEntity = computeDomainsByEntity(people);
   renderCompanyChips(companies);
   addMarkers();
   renderList(people);
   applyFilters();
 
   $("#filtersReset").addEventListener("click", ()=>{
+    activeDomains.clear();
     renderCompanyChips(companies);
     $("#search").value = "";
     applyFilters();

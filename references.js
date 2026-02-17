@@ -37,6 +37,8 @@ let references = [];
 let refMarkers = [];
 let refActiveCompanies = new Set();
 let refCompanyColors = new Map();
+let refActiveDomains = new Set(); // Domaines actifs pour le filtrage
+let refDomainsByEntity = new Map(); // Map<entite, Set<domaine>>
 let refMarkersLayer;
 
 // --- Jitter des marqueurs (répartition en anneaux hexagonaux) ---
@@ -118,6 +120,34 @@ function refComputePalette(items) {
   return uniq;
 }
 
+/* Compute domains per entity */
+function refComputeDomainsByEntity(items){
+  const domainMap = new Map();
+
+  items.forEach(r => {
+    const entity = r.entite;
+    const domaineRaw = r.domaine || "";
+
+    if (!entity) return;
+
+    // Split domains by comma, semicolon, or pipe
+    const domains = domaineRaw
+      .split(/[,;|]+/)
+      .map(d => d.trim())
+      .filter(Boolean);
+
+    if (!domainMap.has(entity)) {
+      domainMap.set(entity, new Set());
+    }
+
+    domains.forEach(d => {
+      domainMap.get(entity).add(d);
+    });
+  });
+
+  return domainMap;
+}
+
 /* Init Leaflet map for References */
 function initRefMap() {
   if (!refMap) {
@@ -187,6 +217,7 @@ async function loadReferences() {
       mail: obj["Mail"] || "",
       tel: obj["Tél"] || "",
       montant: refParseNumber(obj["Montant"]),
+      domaine: obj["Domaine"] || "",
       lat: lat,
       lon: lon
     };
@@ -360,6 +391,10 @@ function refRenderCompanyChips(all) {
   refActiveCompanies = new Set(all);
 
   all.forEach(name => {
+    // Create container for chip + domain bubbles
+    const container = document.createElement("div");
+    container.className = "chip-container";
+
     const btn = document.createElement("button");
     btn.className = "chip active";
     btn.dataset.value = name;
@@ -384,8 +419,54 @@ function refRenderCompanyChips(all) {
       refApplyFilters();
     });
 
-    refFiltersContainer.appendChild(btn);
+    container.appendChild(btn);
+
+    // Add domain bubbles if entity has domains
+    const entityDomains = refDomainsByEntity.get(name);
+    if (entityDomains && entityDomains.size > 0) {
+      const domainsContainer = document.createElement("div");
+      domainsContainer.className = "domain-bubbles";
+
+      Array.from(entityDomains).forEach(domain => {
+        const domainBubble = document.createElement("button");
+        domainBubble.className = "domain-bubble";
+        domainBubble.textContent = domain;
+        domainBubble.dataset.domain = domain;
+
+        // Check if domain is active
+        if (refActiveDomains.has(domain)) {
+          domainBubble.classList.add("active");
+        }
+
+        domainBubble.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          refToggleDomain(domain);
+        });
+
+        domainsContainer.appendChild(domainBubble);
+      });
+
+      container.appendChild(domainsContainer);
+    }
+
+    refFiltersContainer.appendChild(container);
   });
+}
+
+function refToggleDomain(domain){
+  if (refActiveDomains.has(domain)) {
+    refActiveDomains.delete(domain);
+  } else {
+    refActiveDomains.add(domain);
+  }
+
+  // Update visual state of all domain bubbles
+  document.querySelectorAll(".domain-bubble").forEach(bubble => {
+    const bubbleDomain = bubble.dataset.domain;
+    bubble.classList.toggle("active", refActiveDomains.has(bubbleDomain));
+  });
+
+  refApplyFilters();
 }
 
 /* Apply filters */
@@ -395,21 +476,40 @@ function refApplyFilters() {
   const tks = refTokens(q);
 
   const filtered = references.filter(ref => {
+    // Filter by entity
     if (!refActiveCompanies.has(ref.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (refActiveDomains.size > 0) {
+      const entityDomains = refDomainsByEntity.get(ref.entite);
+      if (!entityDomains || entityDomains.size === 0) return false;
+
+      // Check if entity has at least one of the active domains
+      let hasActiveDomain = false;
+      for (const domain of refActiveDomains) {
+        if (entityDomains.has(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
+    // Filter by search query
     if (!tks.length) return true;
     const hay = refNorm([ref.entite, ref.intitule, ref.territoire, ref.annee, ref.cheffe, ref.nomReferent, ref.titreReferent].join(" "));
     return tks.every(t => hay.includes(t));
   });
 
   refRenderList(filtered);
-  
+
   // Update map (avec jitter)
   if (refMarkersLayer) {
-    // mémorise l’ensemble des indices visibles dans l’ordre de la liste filtrée
+    // mémorise l'ensemble des indices visibles dans l'ordre de la liste filtrée
     const idxByRef = new Map(references.map((r,i)=>[r, i]));
     refMarkersLayer.__visibleIdx = filtered.map(r => idxByRef.get(r));
 
-    // applique l’écartement en fonction du zoom courant
+    // applique l'écartement en fonction du zoom courant
     refReflowJitter();
   }
 
@@ -430,6 +530,22 @@ function refExportExcel() {
 
   const filtered = references.filter(ref => {
     if (!refActiveCompanies.has(ref.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (refActiveDomains.size > 0) {
+      const entityDomains = refDomainsByEntity.get(ref.entite);
+      if (!entityDomains || entityDomains.size === 0) return false;
+
+      let hasActiveDomain = false;
+      for (const domain of refActiveDomains) {
+        if (entityDomains.has(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
     if (!tks.length) return true;
     const hay = refNorm([
       ref.entite,
@@ -538,9 +654,10 @@ async function initReferences() {
     // 2. Load data
     references = await loadReferences();
     console.log("[Références] Données chargées:", references.length, "références");
-    
+
     // 3. Setup UI
     const companies = refComputePalette(references);
+    refDomainsByEntity = refComputeDomainsByEntity(references);
     refRenderCompanyChips(companies);
     refAddMarkers();
     refRenderList(references);
@@ -560,6 +677,7 @@ async function initReferences() {
     // Bouton Réinitialiser
     if (refFiltersResetBtn) {
       refFiltersResetBtn.addEventListener("click", () => {
+        refActiveDomains.clear();
         refRenderCompanyChips(companies);
         refSearchInput.value = "";
         refApplyFilters();

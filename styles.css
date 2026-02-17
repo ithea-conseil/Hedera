@@ -105,6 +105,13 @@ body{
 .filters-head{ display:flex; align-items:center; gap:8px; margin-bottom:8px }
 .filters-head strong{ font-size:14px }
 .chips{ display:flex; flex-wrap:wrap; gap:8px }
+
+/* Chip container for entity + domain bubbles */
+.chip-container {
+  position: relative;
+  display: inline-block;
+}
+
 .chip{
   border:none; border-radius:999px; padding:6px 10px;
   background: var(--chip);
@@ -117,6 +124,82 @@ body{
   content:""; display:inline-block; width:.65em; height:.65em; border-radius:50%;
   background: var(--chip-color, var(--chip-active)); margin-right:.45em;
   box-shadow:0 0 0 2px rgba(0,0,0,.3) inset;
+}
+
+/* Domain bubbles - hidden by default, shown on hover */
+.domain-bubbles {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 100;
+}
+
+.chip-container:hover .domain-bubbles {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.domain-bubble {
+  position: absolute;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(46, 167, 107, 0.85);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  outline: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s ease;
+  animation: bubbleFloat 0.3s ease-out;
+}
+
+.domain-bubble:hover {
+  background: rgba(46, 167, 107, 1);
+  outline: 2px solid #fff;
+}
+
+.domain-bubble.active {
+  background: #00b65b;
+  outline: 2px solid #fff;
+}
+
+/* Position bubbles in a circular pattern around the chip */
+.domain-bubble:nth-child(1) {
+  transform: translate(calc(-100% - 60px), -50%);
+}
+.domain-bubble:nth-child(2) {
+  transform: translate(60px, -50%);
+}
+.domain-bubble:nth-child(3) {
+  transform: translate(calc(-100% / 2 - 30px), calc(-100% - 50px));
+}
+.domain-bubble:nth-child(4) {
+  transform: translate(calc(-100% / 2 - 30px), 50px);
+}
+.domain-bubble:nth-child(5) {
+  transform: translate(calc(-100% - 100px), calc(-100% - 40px));
+}
+.domain-bubble:nth-child(6) {
+  transform: translate(100px, calc(-100% - 40px));
+}
+
+@keyframes bubbleFloat {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 /* Annuaire – état "tout actif" visuel */
