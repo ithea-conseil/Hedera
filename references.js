@@ -70,11 +70,10 @@ function refJitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
 // Track last zoom level to avoid unnecessary recalculations
 let _refLastZoom = null;
 
-// Debounce reflow pour éviter de recalculer à chaque tick de zoom
-let _refReflowTimer;
-function refReflowJitterDebounced(){
-  clearTimeout(_refReflowTimer);
-  _refReflowTimer = setTimeout(refReflowJitter, 150);
+// Handler for zoom events - minimal delay to let Leaflet finish internal operations
+function refHandleZoom(){
+  // Tiny delay (10ms) to ensure Leaflet has finished updating the DOM
+  setTimeout(() => refReflowJitter(false), 10);
 }
 
 // Recalcule la position décalée des marqueurs visibles
@@ -86,8 +85,8 @@ function refReflowJitter(updateLayers = false){
   const currentZoom = refMap.getZoom();
   const visibleIdx = refMarkersLayer.__visibleIdx || [];
 
-  // Skip if zoom hasn't changed significantly (within 0.5 levels) AND not forcing update
-  if (!updateLayers && _refLastZoom !== null && Math.abs(currentZoom - _refLastZoom) < 0.5) {
+  // Skip if zoom hasn't changed (within 0.1 levels) AND not forcing update
+  if (!updateLayers && _refLastZoom !== null && Math.abs(currentZoom - _refLastZoom) < 0.1) {
     return;
   }
   _refLastZoom = currentZoom;
@@ -224,8 +223,8 @@ function initRefMap() {
     L.control.zoom({ position: "bottomleft" }).addTo(refMap);
     refMarkersLayer = L.layerGroup().addTo(refMap);
 
-    // Recalcule l'écartement quand on zoome/dézoome (debounced)
-    refMap.on('zoomend', refReflowJitterDebounced);
+    // Recalcule l'écartement quand on zoome/dézoome immédiatement (pas de debounce)
+    refMap.on('zoomend', refHandleZoom);
 
     
     // Force l'invalidation de la taille après un court délai
@@ -441,13 +440,13 @@ function refRenderList(items) {
         const targetZoom = Math.max(refMap.getZoom(), 9);
 
         // Disable reflow temporarily to prevent popup from closing
-        refMap.off('zoomend', refReflowJitterDebounced);
+        refMap.off('zoomend', refHandleZoom);
 
         refMap.flyTo(m.getLatLng(), targetZoom, { duration: .5 });
 
         setTimeout(() => {
           // Re-enable reflow
-          refMap.on('zoomend', refReflowJitterDebounced);
+          refMap.on('zoomend', refHandleZoom);
 
           // Close tooltip before opening popup
           if (m.closeTooltip) m.closeTooltip();

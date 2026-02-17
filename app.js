@@ -154,11 +154,10 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
 // Track last zoom level to avoid unnecessary recalculations
 let _lastZoom = null;
 
-// Debounce reflow pour éviter de recalculer à chaque tick de zoom
-let _reflowTimer;
-function reflowJitterDebounced(){
-  clearTimeout(_reflowTimer);
-  _reflowTimer = setTimeout(reflowJitter, 150);
+// Handler for zoom events - minimal delay to let Leaflet finish internal operations
+function handleZoom(){
+  // Tiny delay (10ms) to ensure Leaflet has finished updating the DOM
+  setTimeout(() => reflowJitter(false), 10);
 }
 
 // Recalcule et réapplique la position décalée (jitter) des marqueurs visibles
@@ -170,8 +169,8 @@ function reflowJitter(updateLayers = false){
   const currentZoom = map.getZoom();
   const visibleIdx = markersLayer.__visibleIdx || [];
 
-  // Skip if zoom hasn't changed significantly (within 0.5 levels) AND not forcing update
-  if (!updateLayers && _lastZoom !== null && Math.abs(currentZoom - _lastZoom) < 0.5) {
+  // Skip if zoom hasn't changed (within 0.1 levels) AND not forcing update
+  if (!updateLayers && _lastZoom !== null && Math.abs(currentZoom - _lastZoom) < 0.1) {
     return;
   }
   _lastZoom = currentZoom;
@@ -241,8 +240,8 @@ function initMap(){
   // Calque simple qui affichera uniquement les marqueurs visibles (pas de cluster)
   markersLayer = L.layerGroup().addTo(map);
 
-  // À chaque zoom, on recalcule le jitter (debounced)
-  map.on('zoomend', reflowJitterDebounced);
+  // À chaque zoom, on recalcule le jitter avec un mini-délai
+  map.on('zoomend', handleZoom);
 }
 
 
@@ -666,13 +665,13 @@ function renderList(items){
       const targetZoom = Math.max(map.getZoom(), 9);
 
       // Disable reflow temporarily to prevent popup from closing
-      map.off('zoomend', reflowJitterDebounced);
+      map.off('zoomend', handleZoom);
 
       map.flyTo(m.getLatLng(), targetZoom, { duration:.5 });
 
       setTimeout(()=> {
         // Re-enable reflow
-        map.on('zoomend', reflowJitterDebounced);
+        map.on('zoomend', handleZoom);
 
         // Close tooltip before opening popup
         if (m.closeTooltip) m.closeTooltip();
