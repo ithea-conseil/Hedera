@@ -151,18 +151,28 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
   return map.layerPointToLatLng(p2);
 }
 
+// Track last zoom level to avoid unnecessary recalculations
+let _lastZoom = null;
+
 // Debounce reflow pour éviter de recalculer à chaque tick de zoom
 let _reflowTimer;
 function reflowJitterDebounced(){
   clearTimeout(_reflowTimer);
-  _reflowTimer = setTimeout(reflowJitter, 200);
+  _reflowTimer = setTimeout(reflowJitter, 300);
 }
 
-// Recalcule et réapplique la position décalée (jitter) des marqueurs visibles
+// Recalcule et réapplique la position décalée (jitter) des marqueurs visibles (optimisé)
 function reflowJitter(){
   if (!markersLayer || !map) return;
+
+  const currentZoom = map.getZoom();
   const visibleIdx = markersLayer.__visibleIdx || [];
-  const zoom = map.getZoom(); // cache le zoom une seule fois
+
+  // Skip if zoom hasn't changed significantly (within 0.5 levels)
+  if (_lastZoom !== null && Math.abs(currentZoom - _lastZoom) < 0.5) {
+    return;
+  }
+  _lastZoom = currentZoom;
 
   // Regroupe les personnes visibles par coordonnées proches.
   const groups = new Map(); // key -> [indices]
@@ -176,8 +186,9 @@ function reflowJitter(){
     groups.get(key).push(idx);
   });
 
-  // Met à jour la position de chaque marker selon son rang dans le groupe
-  markersLayer.clearLayers();
+  // Update positions WITHOUT clearing layers (much faster)
+  const markersInLayer = new Set();
+
   for (const [key, arr] of groups){
     const firstP = people[arr[0]];
     const base = L.latLng(firstP.lat, firstP.lon);
@@ -185,11 +196,23 @@ function reflowJitter(){
     const n = arr.length;
     arr.forEach((idx, k)=>{
       const m = markers[idx];
-      const j = jitterLatLng(base, k, n, zoom);
+      const j = jitterLatLng(base, k, n, currentZoom);
       m.setLatLng(j);
-      markersLayer.addLayer(m);
+
+      // Only add if not already in layer
+      if (!markersLayer.hasLayer(m)) {
+        markersLayer.addLayer(m);
+      }
+      markersInLayer.add(m);
     });
   }
+
+  // Remove markers that shouldn't be visible (only if filter changed)
+  markersLayer.eachLayer(layer => {
+    if (!markersInLayer.has(layer)) {
+      markersLayer.removeLayer(layer);
+    }
+  });
 }
 
 
@@ -816,6 +839,9 @@ function applyFilters(){
   // Mémorise quels indices sont visibles, puis applique jitter + ajout au layer
   const idxByRef = new Map(people.map((p,i)=>[p, i]));
   markersLayer.__visibleIdx = filtered.map(p => idxByRef.get(p));
+
+  // Reset zoom tracking to force recalculation after filter change
+  _lastZoom = null;
 
   reflowJitter(); // positionne et affiche uniquement les visibles
 }

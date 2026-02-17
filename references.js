@@ -67,18 +67,28 @@ function refJitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
   return refMap.layerPointToLatLng(p2);
 }
 
+// Track last zoom level to avoid unnecessary recalculations
+let _refLastZoom = null;
+
 // Debounce reflow pour éviter de recalculer à chaque tick de zoom
 let _refReflowTimer;
 function refReflowJitterDebounced(){
   clearTimeout(_refReflowTimer);
-  _refReflowTimer = setTimeout(refReflowJitter, 200);
+  _refReflowTimer = setTimeout(refReflowJitter, 300);
 }
 
-// Recalcule la position décalée des marqueurs visibles et les (ré)ajoute au layer
+// Recalcule la position décalée des marqueurs visibles (optimisé)
 function refReflowJitter(){
   if (!refMarkersLayer || !refMap) return;
+
+  const currentZoom = refMap.getZoom();
   const visibleIdx = refMarkersLayer.__visibleIdx || [];
-  const zoom = refMap.getZoom(); // cache le zoom une seule fois
+
+  // Skip if zoom hasn't changed significantly (within 0.5 levels)
+  if (_refLastZoom !== null && Math.abs(currentZoom - _refLastZoom) < 0.5) {
+    return;
+  }
+  _refLastZoom = currentZoom;
 
   // regroupe par coordonnées exactes (~1e-5°)
   const groups = new Map(); // "lat,lon" -> [indices]
@@ -89,19 +99,35 @@ function refReflowJitter(){
     groups.get(key).push(idx);
   });
 
-  refMarkersLayer.clearLayers();
+  // Update positions WITHOUT clearing layers (much faster)
+  const markersInLayer = new Set();
+
   for (const [key, arr] of groups){
     const [lat, lon] = key.split(',').map(Number);
     const base = L.latLng(lat, lon);
     const n = arr.length;
+
     arr.forEach((idx, k)=>{
       const m = refMarkers[idx];
       if (!m) return;
-      const j = refJitterLatLng(base, k, n, zoom);
+
+      const j = refJitterLatLng(base, k, n, currentZoom);
       m.setLatLng(j);
-      refMarkersLayer.addLayer(m);
+
+      // Only add if not already in layer
+      if (!refMarkersLayer.hasLayer(m)) {
+        refMarkersLayer.addLayer(m);
+      }
+      markersInLayer.add(m);
     });
   }
+
+  // Remove markers that shouldn't be visible (only if filter changed)
+  refMarkersLayer.eachLayer(layer => {
+    if (!markersInLayer.has(layer)) {
+      refMarkersLayer.removeLayer(layer);
+    }
+  });
 }
 
 
@@ -584,6 +610,9 @@ function refApplyFilters() {
     // mémorise l'ensemble des indices visibles dans l'ordre de la liste filtrée
     const idxByRef = new Map(references.map((r,i)=>[r, i]));
     refMarkersLayer.__visibleIdx = filtered.map(r => idxByRef.get(r));
+
+    // Reset zoom tracking to force recalculation after filter change
+    _refLastZoom = null;
 
     // applique l'écartement en fonction du zoom courant
     refReflowJitter();
