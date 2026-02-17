@@ -142,7 +142,7 @@ body{
 /* Domain bubbles - hidden by default, shown on hover */
 .domain-bubbles {
   position: absolute;
-  top: 100%;
+  top: 27px;
   left: 50%;
   transform: translateX(-50%) translateY(-10px) scale(0.95);
   margin-top: 12px;
