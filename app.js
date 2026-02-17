@@ -154,10 +154,14 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
 // Track last zoom level to avoid unnecessary recalculations
 let _lastZoom = null;
 
-// Handler for zoom events - minimal delay to let Leaflet finish internal operations
-function handleZoom(){
-  // Tiny delay (10ms) to ensure Leaflet has finished updating the DOM
-  setTimeout(() => reflowJitter(false), 10);
+// Throttle for updating positions during zoom animation (not after)
+let _zoomThrottleTimer = null;
+function handleZoomThrottled(){
+  if (_zoomThrottleTimer) return; // Skip if already scheduled
+  _zoomThrottleTimer = setTimeout(() => {
+    reflowJitter(false);
+    _zoomThrottleTimer = null;
+  }, 50); // Update every 50ms during zoom animation
 }
 
 // Recalcule et réapplique la position décalée (jitter) des marqueurs visibles
@@ -240,8 +244,10 @@ function initMap(){
   // Calque simple qui affichera uniquement les marqueurs visibles (pas de cluster)
   markersLayer = L.layerGroup().addTo(map);
 
-  // À chaque zoom, on recalcule le jitter avec un mini-délai
-  map.on('zoomend', handleZoom);
+  // Met à jour les positions PENDANT le zoom (throttled) pour éviter les flash
+  map.on('zoom', handleZoomThrottled);
+  // Et une dernière fois à la fin pour être précis
+  map.on('zoomend', () => reflowJitter(false));
 }
 
 
@@ -665,13 +671,15 @@ function renderList(items){
       const targetZoom = Math.max(map.getZoom(), 9);
 
       // Disable reflow temporarily to prevent popup from closing
-      map.off('zoomend', handleZoom);
+      map.off('zoom', handleZoomThrottled);
+      map.off('zoomend');
 
       map.flyTo(m.getLatLng(), targetZoom, { duration:.5 });
 
       setTimeout(()=> {
         // Re-enable reflow
-        map.on('zoomend', handleZoom);
+        map.on('zoom', handleZoomThrottled);
+        map.on('zoomend', () => reflowJitter(false));
 
         // Close tooltip before opening popup
         if (m.closeTooltip) m.closeTooltip();

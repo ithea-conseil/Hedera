@@ -70,10 +70,14 @@ function refJitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
 // Track last zoom level to avoid unnecessary recalculations
 let _refLastZoom = null;
 
-// Handler for zoom events - minimal delay to let Leaflet finish internal operations
-function refHandleZoom(){
-  // Tiny delay (10ms) to ensure Leaflet has finished updating the DOM
-  setTimeout(() => refReflowJitter(false), 10);
+// Throttle for updating positions during zoom animation (not after)
+let _refZoomThrottleTimer = null;
+function refHandleZoomThrottled(){
+  if (_refZoomThrottleTimer) return; // Skip if already scheduled
+  _refZoomThrottleTimer = setTimeout(() => {
+    refReflowJitter(false);
+    _refZoomThrottleTimer = null;
+  }, 50); // Update every 50ms during zoom animation
 }
 
 // Recalcule la position décalée des marqueurs visibles
@@ -223,8 +227,10 @@ function initRefMap() {
     L.control.zoom({ position: "bottomleft" }).addTo(refMap);
     refMarkersLayer = L.layerGroup().addTo(refMap);
 
-    // Recalcule l'écartement quand on zoome/dézoome immédiatement (pas de debounce)
-    refMap.on('zoomend', refHandleZoom);
+    // Met à jour les positions PENDANT le zoom (throttled) pour éviter les flash
+    refMap.on('zoom', refHandleZoomThrottled);
+    // Et une dernière fois à la fin pour être précis
+    refMap.on('zoomend', () => refReflowJitter(false));
 
     
     // Force l'invalidation de la taille après un court délai
@@ -440,13 +446,15 @@ function refRenderList(items) {
         const targetZoom = Math.max(refMap.getZoom(), 9);
 
         // Disable reflow temporarily to prevent popup from closing
-        refMap.off('zoomend', refHandleZoom);
+        refMap.off('zoom', refHandleZoomThrottled);
+        refMap.off('zoomend');
 
         refMap.flyTo(m.getLatLng(), targetZoom, { duration: .5 });
 
         setTimeout(() => {
           // Re-enable reflow
-          refMap.on('zoomend', refHandleZoom);
+          refMap.on('zoom', refHandleZoomThrottled);
+          refMap.on('zoomend', () => refReflowJitter(false));
 
           // Close tooltip before opening popup
           if (m.closeTooltip) m.closeTooltip();
