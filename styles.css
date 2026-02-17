@@ -110,6 +110,16 @@ body{
 .chip-container {
   position: relative;
   display: inline-block;
+  padding: 6px;
+  margin: -6px;
+  border-radius: 16px;
+  transition: background 0.25s ease;
+}
+
+/* Background highlight when hovering chip container */
+.chip-container:hover {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
 .chip{
@@ -117,9 +127,12 @@ body{
   background: var(--chip);
   color:#fff; cursor:pointer;
   outline:2px solid rgba(255,255,255,.18);
-  transition: all .15s ease;
+  transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .chip.active{ background: var(--chip-color, var(--chip-active)); outline:2px solid #fff }
+.chip:hover {
+  transform: translateY(-1px);
+}
 .chip::before{
   content:""; display:inline-block; width:.65em; height:.65em; border-radius:50%;
   background: var(--chip-color, var(--chip-active)); margin-right:.45em;
@@ -130,17 +143,23 @@ body{
 .domain-bubbles {
   position: absolute;
   top: 100%;
-  left: 0;
-  margin-top: 8px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px) scale(0.95);
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   opacity: 0;
   visibility: hidden;
-  transform: translateY(-10px);
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 150;
-  min-width: 120px;
+  min-width: 140px;
+  padding: 8px;
+  background: rgba(13, 61, 37, 0.95);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
 }
 
 /* Keep bubbles visible when hovering over the container OR the bubbles themselves */
@@ -148,35 +167,49 @@ body{
 .domain-bubbles:hover {
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0) scale(1);
 }
 
 .domain-bubble {
   border: none;
-  border-radius: 999px;
-  padding: 6px 12px;
-  background: rgba(46, 167, 107, 0.9);
+  border-radius: 8px;
+  padding: 8px 14px;
+  background: rgba(46, 167, 107, 0.8);
   color: #fff;
   cursor: pointer;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  outline: 1px solid rgba(255, 255, 255, 0.3);
-  transition: all 0.15s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  outline: 1px solid rgba(255, 255, 255, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: center;
+  animation: bubbleSlideIn 0.3s ease forwards;
+}
+
+@keyframes bubbleSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .domain-bubble:hover {
   background: rgba(46, 167, 107, 1);
-  outline: 2px solid #fff;
-  transform: scale(1.05);
+  outline: 2px solid rgba(255, 255, 255, 0.6);
+  transform: translateX(4px);
+  box-shadow: 0 4px 12px rgba(46, 167, 107, 0.4);
 }
 
 .domain-bubble.active {
-  background: #00b65b;
+  background: linear-gradient(135deg, #00b65b, #2ea76b);
   outline: 2px solid #fff;
   font-weight: 700;
+  box-shadow: 0 4px 12px rgba(0, 182, 91, 0.5);
 }
 
 /* Annuaire – état "tout actif" visuel */
@@ -469,9 +502,24 @@ body.veille-collapsed #veillePanelToggle{ transform:none }
 
 /* For popup cards - slightly different style */
 .popup-card .intitule-chip {
-  background: rgba(46, 167, 107, 0.15);
-  border-color: rgba(46, 167, 107, 0.35);
-  color: #e8f5e9;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(46, 167, 107, 0.5);
+  color: #000;
+  font-weight: 600;
+}
+
+/* For tooltips - compact and readable */
+.leaflet-tooltip .intitule-chips {
+  gap: 4px;
+  margin-top: 0;
+}
+
+.leaflet-tooltip .intitule-chip {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 10px;
+  padding: 3px 8px;
 }
 
 /* (déjà présent) bloc "objet" pleine largeur – inchangé */

@@ -696,7 +696,7 @@ function renderCompanyChips(all){
 
         domainBubble.addEventListener("click", (e)=>{
           e.stopPropagation();
-          toggleDomain(domain);
+          toggleDomain(domain, name);
         });
 
         domainsContainer.appendChild(domainBubble);
@@ -712,8 +712,21 @@ function renderCompanyChips(all){
   syncChipsAllState();
 }
 
-function toggleDomain(domain){
+function toggleDomain(domain, entityName){
   console.log("[Domain Filter] Toggle domain:", domain);
+
+  // If entity is not active, activate it first
+  if (entityName && !activeCompanies.has(entityName)) {
+    console.log("[Domain Filter] Activating parent entity:", entityName);
+    activeCompanies.add(entityName);
+
+    // Update chip visual state
+    $$("#companies .chip").forEach(chip => {
+      if (chip.dataset.value === entityName) {
+        chip.classList.add("active");
+      }
+    });
+  }
 
   if (activeDomains.has(domain)) {
     activeDomains.delete(domain);
@@ -731,6 +744,7 @@ function toggleDomain(domain){
     bubble.classList.toggle("active", activeDomains.has(bubbleDomain));
   });
 
+  syncChipsAllState();
   applyFilters();
 }
 

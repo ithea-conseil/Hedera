@@ -274,10 +274,10 @@ function refAddMarkers() {
 
     const m = L.marker([ref.lat, ref.lon], { icon, riseOnHover: true, __entite: ref.entite });
 
-    // Hover tooltip - format simple comme l'Annuaire
+    // Hover tooltip - with chips formatting
     m.on('mouseover', () => {
-    const tooltip = String(ref.intitule || "").trim();
-    m.bindTooltip(tooltip || "Référence", {
+    const tooltipHTML = fmtIntitule(ref.intitule) || "Référence";
+    m.bindTooltip(tooltipHTML, {
       className: 'mini-tip ref-tip',   // <- extra classe pour cibler le style
       direction: 'top',
       offset: [0, -12.5],
@@ -458,7 +458,7 @@ function refRenderCompanyChips(all) {
 
         domainBubble.addEventListener("click", (e)=>{
           e.stopPropagation();
-          refToggleDomain(domain);
+          refToggleDomain(domain, name);
         });
 
         domainsContainer.appendChild(domainBubble);
@@ -471,8 +471,21 @@ function refRenderCompanyChips(all) {
   });
 }
 
-function refToggleDomain(domain){
+function refToggleDomain(domain, entityName){
   console.log("[Ref Domain Filter] Toggle domain:", domain);
+
+  // If entity is not active, activate it first
+  if (entityName && !refActiveCompanies.has(entityName)) {
+    console.log("[Ref Domain Filter] Activating parent entity:", entityName);
+    refActiveCompanies.add(entityName);
+
+    // Update chip visual state
+    document.querySelectorAll("#refFilters .chip").forEach(chip => {
+      if (chip.dataset.value === entityName) {
+        chip.classList.add("active");
+      }
+    });
+  }
 
   if (refActiveDomains.has(domain)) {
     refActiveDomains.delete(domain);
