@@ -747,13 +747,18 @@ function applyFilters(){
 
     // Filter by domain (if any domains are selected)
     if (activeDomains.size > 0) {
-      const entityDomains = domainsByEntity.get(p.entite);
-      if (!entityDomains || entityDomains.size === 0) return false;
+      // Parse domains from THIS specific person
+      const personDomains = (p.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
 
-      // Check if entity has at least one of the active domains
+      if (personDomains.length === 0) return false;
+
+      // Check if THIS person has at least one of the active domains
       let hasActiveDomain = false;
       for (const domain of activeDomains) {
-        if (entityDomains.has(domain)) {
+        if (personDomains.includes(domain)) {
           hasActiveDomain = true;
           break;
         }
@@ -800,12 +805,16 @@ function annuaireExportExcel() {
 
     // Filter by domain (if any domains are selected)
     if (activeDomains.size > 0) {
-      const entityDomains = domainsByEntity.get(p.entite);
-      if (!entityDomains || entityDomains.size === 0) return false;
+      const personDomains = (p.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
+
+      if (personDomains.length === 0) return false;
 
       let hasActiveDomain = false;
       for (const domain of activeDomains) {
-        if (entityDomains.has(domain)) {
+        if (personDomains.includes(domain)) {
           hasActiveDomain = true;
           break;
         }

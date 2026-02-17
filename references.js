@@ -489,13 +489,18 @@ function refApplyFilters() {
 
     // Filter by domain (if any domains are selected)
     if (refActiveDomains.size > 0) {
-      const entityDomains = refDomainsByEntity.get(ref.entite);
-      if (!entityDomains || entityDomains.size === 0) return false;
+      // Parse domains from THIS specific reference
+      const refDomains = (ref.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
 
-      // Check if entity has at least one of the active domains
+      if (refDomains.length === 0) return false;
+
+      // Check if THIS reference has at least one of the active domains
       let hasActiveDomain = false;
       for (const domain of refActiveDomains) {
-        if (entityDomains.has(domain)) {
+        if (refDomains.includes(domain)) {
           hasActiveDomain = true;
           break;
         }
@@ -543,12 +548,16 @@ function refExportExcel() {
 
     // Filter by domain (if any domains are selected)
     if (refActiveDomains.size > 0) {
-      const entityDomains = refDomainsByEntity.get(ref.entite);
-      if (!entityDomains || entityDomains.size === 0) return false;
+      const refDomains = (ref.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
+
+      if (refDomains.length === 0) return false;
 
       let hasActiveDomain = false;
       for (const domain of refActiveDomains) {
-        if (entityDomains.has(domain)) {
+        if (refDomains.includes(domain)) {
           hasActiveDomain = true;
           break;
         }
