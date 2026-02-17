@@ -635,8 +635,17 @@ function renderList(items){
     const idx = people.indexOf(p);
     const m = markers[idx];
     if (m){
-      map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 9), { duration:.5 });
+      const targetZoom = Math.max(map.getZoom(), 9);
+
+      // Disable reflow temporarily to prevent popup from closing
+      map.off('zoomend', reflowJitterDebounced);
+
+      map.flyTo(m.getLatLng(), targetZoom, { duration:.5 });
+
       setTimeout(()=> {
+        // Re-enable reflow
+        map.on('zoomend', reflowJitterDebounced);
+
         // Close tooltip before opening popup
         if (m.closeTooltip) m.closeTooltip();
         // Open popup directly instead of firing click event

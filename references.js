@@ -407,8 +407,17 @@ function refRenderList(items) {
       const idx = references.indexOf(ref);
       const m = refMarkers[idx];
       if (m && refMap) {
-        refMap.flyTo(m.getLatLng(), Math.max(refMap.getZoom(), 9), { duration: .5 });
+        const targetZoom = Math.max(refMap.getZoom(), 9);
+
+        // Disable reflow temporarily to prevent popup from closing
+        refMap.off('zoomend', refReflowJitterDebounced);
+
+        refMap.flyTo(m.getLatLng(), targetZoom, { duration: .5 });
+
         setTimeout(() => {
+          // Re-enable reflow
+          refMap.on('zoomend', refReflowJitterDebounced);
+
           // Close tooltip before opening popup
           if (m.closeTooltip) m.closeTooltip();
           // Open popup directly instead of firing click event
