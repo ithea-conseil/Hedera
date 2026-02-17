@@ -103,6 +103,24 @@ function fmtMoney(v) {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
 }
 
+/* Format intitulé as chips */
+function fmtIntitule(intitule) {
+  if (!intitule) return "";
+
+  const items = intitule
+    .split(";")
+    .map(item => item.trim())
+    .filter(Boolean);
+
+  if (items.length === 0) return "";
+
+  const chips = items
+    .map(item => `<span class="intitule-chip">${item}</span>`)
+    .join("");
+
+  return `<div class="intitule-chips">${chips}</div>`;
+}
+
 /* Color palette */
 function refComputePalette(items) {
   const uniq = [...new Set(items.map(r => r.entite).filter(Boolean))];
@@ -296,7 +314,7 @@ const html = `
         ${initial}
       </div>
       <div class="ref-popup-body">
-        <div class="name">${ref.intitule || ""}</div>
+        ${fmtIntitule(ref.intitule)}
 
         <div class="meta">
           ${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}
@@ -360,7 +378,7 @@ function refRenderList(items) {
           ${initial}
         </div>
         <div class="person-body">
-          <div class="name">${ref.intitule || ""}</div>
+          ${fmtIntitule(ref.intitule)}
           <div class="meta">${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}</div>
           <div class="meta">${fmtMoney(ref.montant)}</div>
         </div>

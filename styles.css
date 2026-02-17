@@ -441,4 +441,37 @@ body.veille-collapsed #veillePanelToggle{ transform:none }
 .popup-veille .v-kv .v,
 .popup-veille .v-kv .v strong{ color:#374151; } /* gris foncé */
 
+/* ======= Intitulé mission chips ======= */
+.intitule-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.intitule-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  font-size: 11px;
+  color: #fff;
+  line-height: 1.3;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.intitule-chip:hover {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* For popup cards - slightly different style */
+.popup-card .intitule-chip {
+  background: rgba(46, 167, 107, 0.15);
+  border-color: rgba(46, 167, 107, 0.35);
+  color: #e8f5e9;
+}
+
 /* (déjà présent) bloc "objet" pleine largeur – inchangé */
