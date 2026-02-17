@@ -71,7 +71,7 @@ function refJitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
 let _refReflowTimer;
 function refReflowJitterDebounced(){
   clearTimeout(_refReflowTimer);
-  _refReflowTimer = setTimeout(refReflowJitter, 120);
+  _refReflowTimer = setTimeout(refReflowJitter, 200);
 }
 
 // Recalcule la position décalée des marqueurs visibles et les (ré)ajoute au layer
@@ -177,7 +177,13 @@ function refComputeDomainsByEntity(items){
 /* Init Leaflet map for References */
 function initRefMap() {
   if (!refMap) {
-    refMap = L.map("refMap", { zoomControl: false, preferCanvas: true }).setView([46.71109, 1.7191036], 6);
+    refMap = L.map("refMap", {
+      zoomControl: false,
+      preferCanvas: true,
+      zoomAnimation: true,
+      fadeAnimation: true,
+      markerZoomAnimation: false
+    }).setView([46.71109, 1.7191036], 6);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
@@ -487,13 +493,13 @@ function refToggleDomain(domain, entityName){
   // If entity is not active, activate it first
   if (entityName && !refActiveCompanies.has(entityName)) {
     console.log("[Ref Domain Filter] Activating parent entity:", entityName);
-    refActiveCompanies.add(entityName);
 
-    // Update chip visual state
+    // Set exclusive selection: only this entity
+    refActiveCompanies = new Set([entityName]);
+
+    // Update chip visual state: only this chip is active
     document.querySelectorAll("#refFilters .chip").forEach(chip => {
-      if (chip.dataset.value === entityName) {
-        chip.classList.add("active");
-      }
+      chip.classList.toggle("active", chip.dataset.value === entityName);
     });
   }
 

@@ -155,7 +155,7 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
 let _reflowTimer;
 function reflowJitterDebounced(){
   clearTimeout(_reflowTimer);
-  _reflowTimer = setTimeout(reflowJitter, 120);
+  _reflowTimer = setTimeout(reflowJitter, 200);
 }
 
 // Recalcule et réapplique la position décalée (jitter) des marqueurs visibles
@@ -195,7 +195,13 @@ function reflowJitter(){
 
 /* Map */
 function initMap(){
-  map = L.map("map", { zoomControl:false, preferCanvas: true }).setView([46.71109, 1.7191036], 6);
+  map = L.map("map", {
+    zoomControl: false,
+    preferCanvas: true,
+    zoomAnimation: true,
+    fadeAnimation: true,
+    markerZoomAnimation: false
+  }).setView([46.71109, 1.7191036], 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     maxZoom: 19,
@@ -724,13 +730,13 @@ function toggleDomain(domain, entityName){
   // If entity is not active, activate it first
   if (entityName && !activeCompanies.has(entityName)) {
     console.log("[Domain Filter] Activating parent entity:", entityName);
-    activeCompanies.add(entityName);
 
-    // Update chip visual state
+    // Set exclusive selection: only this entity
+    activeCompanies = new Set([entityName]);
+
+    // Update chip visual state: only this chip is active
     $$("#companies .chip").forEach(chip => {
-      if (chip.dataset.value === entityName) {
-        chip.classList.add("active");
-      }
+      chip.classList.toggle("active", chip.dataset.value === entityName);
     });
   }
 
