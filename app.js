@@ -636,8 +636,12 @@ function renderList(items){
     const m = markers[idx];
     if (m){
       map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 9), { duration:.5 });
-      // déclenche le mécanisme de spiderfy si des marqueurs se chevauchent
-      setTimeout(()=> m.fire('click'), 520);
+      setTimeout(()=> {
+        // Close tooltip before opening popup
+        if (m.closeTooltip) m.closeTooltip();
+        // Open popup directly instead of firing click event
+        openPopup(p, m);
+      }, 520);
     }
 
     });
@@ -727,9 +731,9 @@ function renderCompanyChips(all){
 function toggleDomain(domain, entityName){
   console.log("[Domain Filter] Toggle domain:", domain);
 
-  // If entity is not active, activate it first
-  if (entityName && !activeCompanies.has(entityName)) {
-    console.log("[Domain Filter] Activating parent entity:", entityName);
+  // When clicking a domain bubble, always select ONLY the parent entity
+  if (entityName) {
+    console.log("[Domain Filter] Setting exclusive selection for:", entityName);
 
     // Set exclusive selection: only this entity
     activeCompanies = new Set([entityName]);

@@ -408,7 +408,12 @@ function refRenderList(items) {
       const m = refMarkers[idx];
       if (m && refMap) {
         refMap.flyTo(m.getLatLng(), Math.max(refMap.getZoom(), 9), { duration: .5 });
-        setTimeout(() => m.fire('click'), 520);
+        setTimeout(() => {
+          // Close tooltip before opening popup
+          if (m.closeTooltip) m.closeTooltip();
+          // Open popup directly instead of firing click event
+          refOpenPopup(ref, m);
+        }, 520);
       }
     });
 
@@ -490,9 +495,9 @@ function refRenderCompanyChips(all) {
 function refToggleDomain(domain, entityName){
   console.log("[Ref Domain Filter] Toggle domain:", domain);
 
-  // If entity is not active, activate it first
-  if (entityName && !refActiveCompanies.has(entityName)) {
-    console.log("[Ref Domain Filter] Activating parent entity:", entityName);
+  // When clicking a domain bubble, always select ONLY the parent entity
+  if (entityName) {
+    console.log("[Ref Domain Filter] Setting exclusive selection for:", entityName);
 
     // Set exclusive selection: only this entity
     refActiveCompanies = new Set([entityName]);

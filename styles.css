@@ -34,23 +34,8 @@ body{
 }
 
 /* --- Vues --- */
-.view{
-  position: absolute;
-  top: 54px;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.2s ease, visibility 0s linear 0.2s;
-}
-.view.active{
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transition: opacity 0.2s ease, visibility 0s linear 0s;
-}
+.view{ position:relative; height:calc(100% - 54px); display:none }
+.view.active{ display:block }
 
 #app, #refApp{ position:relative; height:100% }
 
