@@ -502,6 +502,15 @@ function refRenderCompanyChips(all) {
           document.querySelectorAll("#refFilters .chip").forEach(c => c.classList.add("active"));
         }
       }
+
+      // IMPORTANT: Clear domain filters when changing entity
+      // Otherwise domains from entity A will filter references from entity B
+      refActiveDomains.clear();
+      // Update visual state of all domain bubbles
+      document.querySelectorAll(".domain-bubble").forEach(bubble => {
+        bubble.classList.remove("active");
+      });
+
       refApplyFilters();
     });
 
