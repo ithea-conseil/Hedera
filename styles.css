@@ -476,10 +476,11 @@ body.veille-collapsed #veillePanelToggle{ transform:none }
 
 /* ======= Intitulé mission chips ======= */
 .intitule-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 0;
+    margin-bottom: 4px;
 }
 
 .intitule-chip {
