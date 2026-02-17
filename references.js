@@ -74,18 +74,20 @@ let _refLastZoom = null;
 let _refReflowTimer;
 function refReflowJitterDebounced(){
   clearTimeout(_refReflowTimer);
-  _refReflowTimer = setTimeout(refReflowJitter, 300);
+  _refReflowTimer = setTimeout(refReflowJitter, 150);
 }
 
-// Recalcule la position décalée des marqueurs visibles (optimisé)
-function refReflowJitter(){
+// Recalcule la position décalée des marqueurs visibles
+// updateLayers=true : reconstruit complètement (appelé après changement de filtre)
+// updateLayers=false : met juste à jour les positions (appelé pendant zoom)
+function refReflowJitter(updateLayers = false){
   if (!refMarkersLayer || !refMap) return;
 
   const currentZoom = refMap.getZoom();
   const visibleIdx = refMarkersLayer.__visibleIdx || [];
 
-  // Skip if zoom hasn't changed significantly (within 0.5 levels)
-  if (_refLastZoom !== null && Math.abs(currentZoom - _refLastZoom) < 0.5) {
+  // Skip if zoom hasn't changed significantly (within 0.5 levels) AND not forcing update
+  if (!updateLayers && _refLastZoom !== null && Math.abs(currentZoom - _refLastZoom) < 0.5) {
     return;
   }
   _refLastZoom = currentZoom;
@@ -99,35 +101,38 @@ function refReflowJitter(){
     groups.get(key).push(idx);
   });
 
-  // Update positions WITHOUT clearing layers (much faster)
-  const markersInLayer = new Set();
+  if (updateLayers) {
+    // Complete rebuild: clear and re-add all markers (only when filters change)
+    refMarkersLayer.clearLayers();
 
-  for (const [key, arr] of groups){
-    const [lat, lon] = key.split(',').map(Number);
-    const base = L.latLng(lat, lon);
-    const n = arr.length;
+    for (const [key, arr] of groups){
+      const [lat, lon] = key.split(',').map(Number);
+      const base = L.latLng(lat, lon);
+      const n = arr.length;
 
-    arr.forEach((idx, k)=>{
-      const m = refMarkers[idx];
-      if (!m) return;
-
-      const j = refJitterLatLng(base, k, n, currentZoom);
-      m.setLatLng(j);
-
-      // Only add if not already in layer
-      if (!refMarkersLayer.hasLayer(m)) {
+      arr.forEach((idx, k)=>{
+        const m = refMarkers[idx];
+        if (!m) return;
+        const j = refJitterLatLng(base, k, n, currentZoom);
+        m.setLatLng(j);
         refMarkersLayer.addLayer(m);
-      }
-      markersInLayer.add(m);
-    });
-  }
-
-  // Remove markers that shouldn't be visible (only if filter changed)
-  refMarkersLayer.eachLayer(layer => {
-    if (!markersInLayer.has(layer)) {
-      refMarkersLayer.removeLayer(layer);
+      });
     }
-  });
+  } else {
+    // Just update positions during zoom (MUCH faster, no flicker)
+    for (const [key, arr] of groups){
+      const [lat, lon] = key.split(',').map(Number);
+      const base = L.latLng(lat, lon);
+      const n = arr.length;
+
+      arr.forEach((idx, k)=>{
+        const m = refMarkers[idx];
+        if (!m) return;
+        const j = refJitterLatLng(base, k, n, currentZoom);
+        m.setLatLng(j); // Only update position, don't touch layers
+      });
+    }
+  }
 }
 
 
@@ -615,7 +620,7 @@ function refApplyFilters() {
     _refLastZoom = null;
 
     // applique l'écartement en fonction du zoom courant
-    refReflowJitter();
+    refReflowJitter(true); // true = rebuild layers (filtre a changé)
   }
 
 }
