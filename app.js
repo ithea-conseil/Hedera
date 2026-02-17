@@ -713,11 +713,17 @@ function renderCompanyChips(all){
 }
 
 function toggleDomain(domain){
+  console.log("[Domain Filter] Toggle domain:", domain);
+
   if (activeDomains.has(domain)) {
     activeDomains.delete(domain);
+    console.log("[Domain Filter] Removed domain:", domain);
   } else {
     activeDomains.add(domain);
+    console.log("[Domain Filter] Added domain:", domain);
   }
+
+  console.log("[Domain Filter] Active domains:", Array.from(activeDomains));
 
   // Update visual state of all domain bubbles
   $$(".domain-bubble").forEach(bubble => {
@@ -732,6 +738,8 @@ function toggleDomain(domain){
 function applyFilters(){
   const q = $("#search").value || "";
   const tks = tokens(q);
+
+  console.log("[Filters] Applying filters - Active domains:", Array.from(activeDomains), "Active companies:", Array.from(activeCompanies));
 
   const filtered = people.filter(p=> {
     // Filter by entity
@@ -756,6 +764,8 @@ function applyFilters(){
     // Filter by search query
     return matchesQuery(p, tks);
   });
+
+  console.log("[Filters] Filtered results:", filtered.length, "out of", people.length);
 
   renderList(filtered);
 

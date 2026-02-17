@@ -454,11 +454,17 @@ function refRenderCompanyChips(all) {
 }
 
 function refToggleDomain(domain){
+  console.log("[Ref Domain Filter] Toggle domain:", domain);
+
   if (refActiveDomains.has(domain)) {
     refActiveDomains.delete(domain);
+    console.log("[Ref Domain Filter] Removed domain:", domain);
   } else {
     refActiveDomains.add(domain);
+    console.log("[Ref Domain Filter] Added domain:", domain);
   }
+
+  console.log("[Ref Domain Filter] Active domains:", Array.from(refActiveDomains));
 
   // Update visual state of all domain bubbles
   document.querySelectorAll(".domain-bubble").forEach(bubble => {
@@ -474,6 +480,8 @@ function refApplyFilters() {
   const refSearchInput = document.getElementById("refSearch");
   const q = refSearchInput.value || "";
   const tks = refTokens(q);
+
+  console.log("[Ref Filters] Applying filters - Active domains:", Array.from(refActiveDomains), "Active companies:", Array.from(refActiveCompanies));
 
   const filtered = references.filter(ref => {
     // Filter by entity
@@ -500,6 +508,8 @@ function refApplyFilters() {
     const hay = refNorm([ref.entite, ref.intitule, ref.territoire, ref.annee, ref.cheffe, ref.nomReferent, ref.titreReferent].join(" "));
     return tks.every(t => hay.includes(t));
   });
+
+  console.log("[Ref Filters] Filtered results:", filtered.length, "out of", references.length);
 
   refRenderList(filtered);
 
