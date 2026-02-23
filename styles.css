@@ -365,6 +365,7 @@ body.ref-panel-collapsed #refPanelToggle{ transform:none }
 a.pill.muted.veille-decp-pill {
     bottom: 8px;
     right: 50%;
+    position:fixed;
 }
 
 /* Veille : table résultats */
