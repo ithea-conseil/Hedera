@@ -83,7 +83,7 @@ body{
 
 .controls{ padding:12px; border-bottom:1px solid var(--border) }
 .search-row{ display:flex; gap:8px; align-items:center }
-#search, #refSearch, #veilleSearch, #awardeeInput{
+#search, #refSearch, #veilleSearch, #awardeeInput, .criteria-input{
   width:100%; padding:10px 12px; border-radius:8px;
   border:1px solid var(--border); outline:none;
   background: rgba(255,255,255,.08); color:#fff;
@@ -400,22 +400,20 @@ body.veille-collapsed #veillePanelToggle{ transform:none }
 }
 .criteria-remove:hover{ background:rgba(220,50,50,.4); }
 
-.criteria-operator{
-  display:flex; align-items:center; padding:5px 0;
+/* Toggle de mode global (segmented control) */
+.criteria-mode{
+  display:flex; margin-bottom:8px;
+  background:rgba(255,255,255,.08);
+  border:1px solid var(--border);
+  border-radius:8px; overflow:hidden; align-self:flex-start;
 }
-
-.op-toggle{
-  padding:3px 14px; border-radius:999px;
-  border:1px solid rgba(255,255,255,.3);
-  background:rgba(255,255,255,.1); color:#fff;
-  cursor:pointer; font-size:11px; font-weight:700;
-  letter-spacing:.06em; transition:background .2s, color .2s, border-color .2s;
+.mode-btn{
+  padding:5px 14px; border:none; background:transparent;
+  color:rgba(255,255,255,.6); cursor:pointer;
+  font-size:12px; font-weight:600; transition:all .2s; white-space:nowrap;
 }
-.op-toggle.op-ou{
-  background:rgba(250,160,0,.2);
-  border-color:rgba(250,160,0,.6);
-  color:#faa000;
-}
+.mode-btn.active{ background:#00b65b; color:#000; }
+.mode-btn:not(.active):hover{ background:rgba(255,255,255,.1); color:#fff; }
 
 .btn-add-criteria{
   margin-top:8px; padding:5px 12px; border-radius:999px;

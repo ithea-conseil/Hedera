@@ -462,53 +462,16 @@ async function veilleExportJpg() {
 
 /* ---- Critères de recherche multiples ---- */
 function buildQuery() {
-  const container = document.getElementById('searchCriteria');
-  if (!container) return '';
-  const segments = [];
-  let currentSeg = null;
-  for (const child of Array.from(container.children)) {
-    if (child.classList.contains('criteria-row')) {
-      if (currentSeg) segments.push(currentSeg);
-      const val = (child.querySelector('.criteria-input')?.value || '').trim();
-      currentSeg = { term: val, op: 'ET' };
-    } else if (child.classList.contains('criteria-operator')) {
-      if (currentSeg) {
-        currentSeg.op = child.querySelector('.op-toggle')?.dataset.op || 'ET';
-      }
-    }
-  }
-  if (currentSeg) segments.push(currentSeg);
-  const nonEmpty = segments.filter(s => s.term !== '');
-  if (nonEmpty.length === 0) return '';
-  let query = nonEmpty[0].term;
-  for (let i = 1; i < nonEmpty.length; i++) {
-    query += nonEmpty[i - 1].op === 'OU' ? ` OR ${nonEmpty[i].term}` : ` ${nonEmpty[i].term}`;
-  }
-  return query;
-}
-
-function toggleOperator(e) {
-  const btn = e.currentTarget;
-  const next = btn.dataset.op === 'ET' ? 'OU' : 'ET';
-  btn.dataset.op = next;
-  btn.textContent = next;
-  btn.classList.toggle('op-ou', next === 'OU');
+  const mode = document.querySelector('#criteriaMode .mode-btn.active')?.dataset.mode || 'ET';
+  const inputs = document.querySelectorAll('#searchCriteria .criteria-input');
+  const terms = Array.from(inputs).map(i => i.value.trim()).filter(Boolean);
+  if (terms.length === 0) return '';
+  return mode === 'OU' ? terms.join(' OR ') : terms.join(' ');
 }
 
 function addCriterion() {
   const container = document.getElementById('searchCriteria');
   if (!container) return;
-
-  const opDiv = document.createElement('div');
-  opDiv.className = 'criteria-operator';
-  const opBtn = document.createElement('button');
-  opBtn.type = 'button';
-  opBtn.className = 'op-toggle';
-  opBtn.dataset.op = 'ET';
-  opBtn.textContent = 'ET';
-  opBtn.addEventListener('click', toggleOperator);
-  opDiv.appendChild(opBtn);
-
   const rowDiv = document.createElement('div');
   rowDiv.className = 'criteria-row';
   const input = document.createElement('input');
@@ -522,11 +485,9 @@ function addCriterion() {
   removeBtn.className = 'criteria-remove';
   removeBtn.textContent = '×';
   removeBtn.setAttribute('aria-label', 'Supprimer ce critère');
-  removeBtn.addEventListener('click', () => { opDiv.remove(); rowDiv.remove(); });
+  removeBtn.addEventListener('click', () => rowDiv.remove());
   rowDiv.appendChild(input);
   rowDiv.appendChild(removeBtn);
-
-  container.appendChild(opDiv);
   container.appendChild(rowDiv);
   input.focus();
 }
@@ -627,6 +588,13 @@ function initVeille(){
 
   const addCriteriaBtn = document.getElementById('addCriteria');
   if (addCriteriaBtn) addCriteriaBtn.addEventListener('click', addCriterion);
+
+  document.querySelectorAll('#criteriaMode .mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#criteriaMode .mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
 
 
   if (V_TOGGLE){
