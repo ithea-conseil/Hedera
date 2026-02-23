@@ -307,6 +307,8 @@
     <!-- Overlay/chips (compteurs & feedbacks) -->
     <div id="veilleOverlay" class="hidden">
       <span id="veilleCount" class="pill muted">Saisissez vos critères puis lancez la recherche.</span>
+      <a href="https://decp.info/tableau" target="_blank" rel="noopener noreferrer"
+         class="pill muted veille-decp-pill" title="Accéder aux données brutes DECP">données brutes · decp.info</a>
     </div>
 
     <!-- Panneau latéral dédié Veille -->
@@ -423,19 +425,30 @@
       const veilleBanner   = document.getElementById('veilleBanner');
       const veilleBannerClose = document.getElementById('veilleBannerClose');
 
+      let _bannerTimer = null;
+
+      function dismissVeilleBanner() {
+        if (!veilleBanner || veilleBanner.classList.contains('hidden')) return;
+        clearTimeout(_bannerTimer);
+        veilleBanner.classList.add('fading');
+        setTimeout(() => {
+          veilleBanner.classList.add('hidden');
+          veilleBanner.classList.remove('fading');
+        }, 450);
+        try { localStorage.setItem(BANNER_KEY, '1'); } catch(e) {}
+      }
+
       function showVeilleBanner() {
         let dismissed = false;
         try { dismissed = localStorage.getItem(BANNER_KEY) === '1'; } catch(e) {}
         if (!dismissed && veilleBanner) {
           veilleBanner.classList.remove('hidden');
+          _bannerTimer = setTimeout(dismissVeilleBanner, 15000);
         }
       }
 
       if (veilleBannerClose) {
-        veilleBannerClose.addEventListener('click', () => {
-          if (veilleBanner) veilleBanner.classList.add('hidden');
-          try { localStorage.setItem(BANNER_KEY, '1'); } catch(e) {}
-        });
+        veilleBannerClose.addEventListener('click', dismissVeilleBanner);
       }
       // ---- fin bannière ----
 
