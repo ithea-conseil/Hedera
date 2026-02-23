@@ -308,7 +308,7 @@
       <!-- Contrôles de recherche -->
       <section class="controls">
         <div class="stack">
-          <label class="lbl" for="veilleSearch">
+          <label class="lbl">
               Recherche plein texte
               <span class="info-wrapper">
                 <button
@@ -323,12 +323,17 @@
                   class="info-tooltip"
                   role="tooltip"
                 >
-                  Pour les titulaires, renseigner le nom en MAJUSCULES et sans accent. Exemple : COLLECTIVITES CONSEILS. 
+                  Pour les titulaires, renseigner le nom en MAJUSCULES et sans accent. Exemple : COLLECTIVITES CONSEILS.
                   Cliquer sur le nom de l'entité dans les résultats pour lancer une recherche dédiée.
                 </span>
               </span>
             </label>
-          <input id="veilleSearch" type="search" placeholder="Objet ou titulaire" autocomplete="off" />
+          <div id="searchCriteria" class="search-criteria">
+            <div class="criteria-row">
+              <input type="search" class="criteria-input" id="veilleSearch" placeholder="Objet ou titulaire" autocomplete="off" />
+            </div>
+          </div>
+          <button id="addCriteria" type="button" class="btn-add-criteria">+ Ajouter un critère</button>
         </div>
 
         <!-- <div class="stack">

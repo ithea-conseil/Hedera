@@ -69,8 +69,7 @@ function escAttr(s){ return escHTML(s).replace(/"/g,"&quot;"); }
 
 function triggerAwardeeSearch(name){
   if (!name) return;
-  if (V_SEARCH) V_SEARCH.value = "";
-  // if (V_AWARD) V_AWARD.value = name; // optionnel si tu gardes le champ un jour
+  document.querySelectorAll('#searchCriteria .criteria-input').forEach(i => i.value = '');
   runSearch({ awardee: name });
 }
 
@@ -461,12 +460,83 @@ async function veilleExportJpg() {
 }
 
 
+/* ---- Critères de recherche multiples ---- */
+function buildQuery() {
+  const container = document.getElementById('searchCriteria');
+  if (!container) return '';
+  const segments = [];
+  let currentSeg = null;
+  for (const child of Array.from(container.children)) {
+    if (child.classList.contains('criteria-row')) {
+      if (currentSeg) segments.push(currentSeg);
+      const val = (child.querySelector('.criteria-input')?.value || '').trim();
+      currentSeg = { term: val, op: 'ET' };
+    } else if (child.classList.contains('criteria-operator')) {
+      if (currentSeg) {
+        currentSeg.op = child.querySelector('.op-toggle')?.dataset.op || 'ET';
+      }
+    }
+  }
+  if (currentSeg) segments.push(currentSeg);
+  const nonEmpty = segments.filter(s => s.term !== '');
+  if (nonEmpty.length === 0) return '';
+  let query = nonEmpty[0].term;
+  for (let i = 1; i < nonEmpty.length; i++) {
+    query += nonEmpty[i - 1].op === 'OU' ? ` OR ${nonEmpty[i].term}` : ` ${nonEmpty[i].term}`;
+  }
+  return query;
+}
+
+function toggleOperator(e) {
+  const btn = e.currentTarget;
+  const next = btn.dataset.op === 'ET' ? 'OU' : 'ET';
+  btn.dataset.op = next;
+  btn.textContent = next;
+  btn.classList.toggle('op-ou', next === 'OU');
+}
+
+function addCriterion() {
+  const container = document.getElementById('searchCriteria');
+  if (!container) return;
+
+  const opDiv = document.createElement('div');
+  opDiv.className = 'criteria-operator';
+  const opBtn = document.createElement('button');
+  opBtn.type = 'button';
+  opBtn.className = 'op-toggle';
+  opBtn.dataset.op = 'ET';
+  opBtn.textContent = 'ET';
+  opBtn.addEventListener('click', toggleOperator);
+  opDiv.appendChild(opBtn);
+
+  const rowDiv = document.createElement('div');
+  rowDiv.className = 'criteria-row';
+  const input = document.createElement('input');
+  input.type = 'search';
+  input.className = 'criteria-input';
+  input.placeholder = 'Objet ou titulaire';
+  input.autocomplete = 'off';
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') runSearch(); });
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'criteria-remove';
+  removeBtn.textContent = '×';
+  removeBtn.setAttribute('aria-label', 'Supprimer ce critère');
+  removeBtn.addEventListener('click', () => { opDiv.remove(); rowDiv.remove(); });
+  rowDiv.appendChild(input);
+  rowDiv.appendChild(removeBtn);
+
+  container.appendChild(opDiv);
+  container.appendChild(rowDiv);
+  input.focus();
+}
+
 /* ---- Flux "Rechercher" ---- */
 async function runSearch(opts = {}){
   const override = opts.awardee && String(opts.awardee).trim();
 
   // Si on clique sur un titulaire : on ignore q
-  const q = override ? "" : (V_SEARCH ? (V_SEARCH.value || "") : "");
+  const q = override ? "" : buildQuery();
 
   // awardee depuis l’override (clic) ou depuis le champ (s’il existe encore)
   const awardees = override || (V_AWARD ? (V_AWARD.value || "") : "");
@@ -552,8 +622,11 @@ function initVeille(){
 
   // Enter ↵ déclenche la recherche depuis q ET awardee
   const handleEnter = (e)=>{ if (e.key === "Enter") runSearch(); };
-  V_SEARCH.addEventListener("keydown", handleEnter);
+  if (V_SEARCH) V_SEARCH.addEventListener("keydown", handleEnter);
   if (V_AWARD) V_AWARD.addEventListener("keydown", handleEnter);
+
+  const addCriteriaBtn = document.getElementById('addCriteria');
+  if (addCriteriaBtn) addCriteriaBtn.addEventListener('click', addCriterion);
 
 
   if (V_TOGGLE){
