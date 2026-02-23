@@ -362,10 +362,11 @@ body.ref-panel-collapsed #refPanelToggle{ transform:none }
 }
 .pill.muted{ opacity:.9 }
 
-.pill.muted.veille-decp-pill {
+a.pill.muted.veille-decp-pill {
     bottom: 8px;
     right: 50%;
     position:fixed;
+    color:black;
 }
 
 /* Veille : table résultats */
