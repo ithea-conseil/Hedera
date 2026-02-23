@@ -46,6 +46,8 @@ let people = [];
 let markers = [];
 let activeCompanies = new Set();
 let companyColors = new Map();
+let activeDomains = new Set(); // Domaines actifs pour le filtrage
+let domainsByEntity = new Map(); // Map<entite, Set<domaine>>
 let currentPopupMarker = null;
 
 // nouveau :
@@ -87,7 +89,36 @@ function computePalette(items){
 
   return uniq;
 }
-// Texte simple pour l’étiquette hover
+
+/* Compute domains per entity */
+function computeDomainsByEntity(items){
+  const domainMap = new Map();
+
+  items.forEach(p => {
+    const entity = p.entite;
+    const domaineRaw = p.domaine || "";
+
+    if (!entity) return;
+
+    // Split domains by comma, semicolon, or pipe
+    const domains = domaineRaw
+      .split(/[,;|]+/)
+      .map(d => d.trim())
+      .filter(Boolean);
+
+    if (!domainMap.has(entity)) {
+      domainMap.set(entity, new Set());
+    }
+
+    domains.forEach(d => {
+      domainMap.get(entity).add(d);
+    });
+  });
+
+  return domainMap;
+}
+
+// Texte simple pour l'étiquette hover
 function simpleTipText(p){
   const nom = [p.prenom, p.nom].filter(Boolean).join(" ");
   return nom;
@@ -96,14 +127,13 @@ function simpleTipText(p){
 
 // Décalage (en pixels) converti en LatLng selon le zoom courant.
 // Répartition en "anneaux hexagonaux" : 6, 12, 18, ... par anneau.
-function jitterLatLng(baseLatLng, indexInGroup, groupSize){
-  const zoom = map.getZoom();
+function jitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
+  if (zoom === undefined) zoom = map.getZoom();
   // Amplitude du jitter en px (augmentée pour mieux séparer les marqueurs)
-  // Formule: plus on est dézoomé, plus l'écartement est grand
   const basePx = Math.max(0, Math.min(18, (14 + zoom) * 2 + 4))
   if (groupSize <= 1 || basePx === 0) return baseLatLng;
 
-  // Trouver l’anneau et la position dans l’anneau (6, 12, 18, ...)
+  // Trouver l'anneau et la position dans l'anneau (6, 12, 18, ...)
   let ring = 0, used = 0, cap = 6;
   while (indexInGroup >= used + cap){
     used += cap;
@@ -121,57 +151,103 @@ function jitterLatLng(baseLatLng, indexInGroup, groupSize){
   return map.layerPointToLatLng(p2);
 }
 
+// Track last zoom level to avoid unnecessary recalculations
+let _lastZoom = null;
+
+// Throttle for updating positions during zoom animation (not after)
+let _zoomThrottleTimer = null;
+function handleZoomThrottled(){
+  if (_zoomThrottleTimer) return; // Skip if already scheduled
+  _zoomThrottleTimer = setTimeout(() => {
+    reflowJitter(false);
+    _zoomThrottleTimer = null;
+  }, 50); // Update every 50ms during zoom animation
+}
+
 // Recalcule et réapplique la position décalée (jitter) des marqueurs visibles
-function reflowJitter(){
+// updateLayers=true : reconstruit complètement (appelé après changement de filtre)
+// updateLayers=false : met juste à jour les positions (appelé pendant zoom)
+function reflowJitter(updateLayers = false){
   if (!markersLayer || !map) return;
+
+  const currentZoom = map.getZoom();
   const visibleIdx = markersLayer.__visibleIdx || [];
-  
+
+  // Skip if zoom hasn't changed (within 0.1 levels) AND not forcing update
+  if (!updateLayers && _lastZoom !== null && Math.abs(currentZoom - _lastZoom) < 0.1) {
+    return;
+  }
+  _lastZoom = currentZoom;
+
   // Regroupe les personnes visibles par coordonnées proches.
-  // Modification : Tolérance augmentée à ~0.05° (environ 5.5km) au lieu de 0.001°
   const groups = new Map(); // key -> [indices]
   visibleIdx.forEach((idx)=>{
     const p = people[idx];
-    // On utilise Math.round(coord * 20) pour arrondir au 0.05 près
     const latKey = Math.round(p.lat * 20);
     const lonKey = Math.round(p.lon * 20);
     const key = `${latKey},${lonKey}`;
-    
+
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(idx);
   });
 
-  // Met à jour la position de chaque marker selon son rang dans le groupe
-  markersLayer.clearLayers();
-  for (const [key, arr] of groups){
-    // Pour la base du cluster visuel, on prend la position réelle du premier membre
-    const firstP = people[arr[0]];
-    const base = L.latLng(firstP.lat, firstP.lon);
-    
-    const n = arr.length;
-    arr.forEach((idx, k)=>{
-      const m = markers[idx];
-      const j = jitterLatLng(base, k, n);
-      m.setLatLng(j);
-      markersLayer.addLayer(m);
-    });
+  if (updateLayers) {
+    // Complete rebuild: clear and re-add all markers (only when filters change)
+    markersLayer.clearLayers();
+
+    for (const [key, arr] of groups){
+      const firstP = people[arr[0]];
+      const base = L.latLng(firstP.lat, firstP.lon);
+      const n = arr.length;
+
+      arr.forEach((idx, k)=>{
+        const m = markers[idx];
+        const j = jitterLatLng(base, k, n, currentZoom);
+        m.setLatLng(j);
+        markersLayer.addLayer(m);
+      });
+    }
+  } else {
+    // Just update positions during zoom (MUCH faster, no flicker)
+    for (const [key, arr] of groups){
+      const firstP = people[arr[0]];
+      const base = L.latLng(firstP.lat, firstP.lon);
+      const n = arr.length;
+
+      arr.forEach((idx, k)=>{
+        const m = markers[idx];
+        const j = jitterLatLng(base, k, n, currentZoom);
+        m.setLatLng(j); // Only update position, don't touch layers
+      });
+    }
   }
 }
 
 
 /* Map */
 function initMap(){
-  map = L.map("map", { zoomControl:false }).setView([46.71109, 1.7191036], 6);
+  map = L.map("map", {
+    zoomControl: false,
+    preferCanvas: true,
+    zoomAnimation: true,
+    fadeAnimation: true,
+    markerZoomAnimation: false
+  }).setView([46.71109, 1.7191036], 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 19
+    maxZoom: 19,
+    updateWhenZooming: false,
+    updateInterval: 200
   }).addTo(map);
   L.control.zoom({position:"bottomleft"}).addTo(map);
 
   // Calque simple qui affichera uniquement les marqueurs visibles (pas de cluster)
   markersLayer = L.layerGroup().addTo(map);
 
-  // À chaque zoom, on recalcule le jitter pour les marqueurs visibles
-  map.on('zoomend', reflowJitter);
+  // Met à jour les positions PENDANT le zoom (throttled) pour éviter les flash
+  map.on('zoom', handleZoomThrottled);
+  // Et une dernière fois à la fin pour être précis
+  map.on('zoomend', () => reflowJitter(false));
 }
 
 
@@ -238,7 +314,7 @@ function normalizePeople(table){
     poste: pick(row, ["Poste occupé","Poste","Fonction"]),
     ville : pick(row, ["Zone géographique","Localité","Localite"]),
     competences: pick(row, ["Compétences clés","Compétences","Competences"]),
-
+    domaine: pick(row, ["Domaine","DOMAINE","Domaines"]),
 
     lat: parseNumber(pick(row, ["latitude","Lat","lat"])),
     lon: parseNumber(pick(row, ["longitude","Lon","lon","lng"]))
@@ -592,9 +668,24 @@ function renderList(items){
     const idx = people.indexOf(p);
     const m = markers[idx];
     if (m){
-      map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 9), { duration:.5 });
-      // déclenche le mécanisme de spiderfy si des marqueurs se chevauchent
-      setTimeout(()=> m.fire('click'), 520);
+      const targetZoom = Math.max(map.getZoom(), 9);
+
+      // Disable reflow temporarily to prevent popup from closing
+      map.off('zoom', handleZoomThrottled);
+      map.off('zoomend');
+
+      map.flyTo(m.getLatLng(), targetZoom, { duration:.5 });
+
+      setTimeout(()=> {
+        // Re-enable reflow
+        map.on('zoom', handleZoomThrottled);
+        map.on('zoomend', () => reflowJitter(false));
+
+        // Close tooltip before opening popup
+        if (m.closeTooltip) m.closeTooltip();
+        // Open popup directly instead of firing click event
+        openPopup(p, m);
+      }, 520);
     }
 
     });
@@ -612,6 +703,10 @@ function renderCompanyChips(all){
   activeCompanies = new Set(all);
 
   all.forEach(name=>{
+    // Create container for chip + domain bubbles
+    const container = document.createElement("div");
+    container.className = "chip-container";
+
     const btn = document.createElement("button");
     btn.className = "chip active";
     btn.dataset.value = name;
@@ -640,11 +735,77 @@ function renderCompanyChips(all){
       applyFilters();
     });
 
-    wrap.appendChild(btn);
+    container.appendChild(btn);
+
+    // Add domain bubbles if entity has domains
+    const entityDomains = domainsByEntity.get(name);
+    if (entityDomains && entityDomains.size > 0) {
+      const domainsContainer = document.createElement("div");
+      domainsContainer.className = "domain-bubbles";
+
+      Array.from(entityDomains).forEach(domain => {
+        const domainBubble = document.createElement("button");
+        domainBubble.className = "domain-bubble";
+        domainBubble.textContent = domain;
+        domainBubble.dataset.domain = domain;
+
+        // Check if domain is active
+        if (activeDomains.has(domain)) {
+          domainBubble.classList.add("active");
+        }
+
+        domainBubble.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          toggleDomain(domain, name);
+        });
+
+        domainsContainer.appendChild(domainBubble);
+      });
+
+      container.appendChild(domainsContainer);
+    }
+
+    wrap.appendChild(container);
   });
 
   // état visuel initial : tout actif mais aspect "inactif"
   syncChipsAllState();
+}
+
+function toggleDomain(domain, entityName){
+  console.log("[Domain Filter] Toggle domain:", domain);
+
+  // When clicking a domain bubble, always select ONLY the parent entity
+  if (entityName) {
+    console.log("[Domain Filter] Setting exclusive selection for:", entityName);
+
+    // Set exclusive selection: only this entity
+    activeCompanies = new Set([entityName]);
+
+    // Update chip visual state: only this chip is active
+    $$("#companies .chip").forEach(chip => {
+      chip.classList.toggle("active", chip.dataset.value === entityName);
+    });
+  }
+
+  if (activeDomains.has(domain)) {
+    activeDomains.delete(domain);
+    console.log("[Domain Filter] Removed domain:", domain);
+  } else {
+    activeDomains.add(domain);
+    console.log("[Domain Filter] Added domain:", domain);
+  }
+
+  console.log("[Domain Filter] Active domains:", Array.from(activeDomains));
+
+  // Update visual state of all domain bubbles
+  $$(".domain-bubble").forEach(bubble => {
+    const bubbleDomain = bubble.dataset.domain;
+    bubble.classList.toggle("active", activeDomains.has(bubbleDomain));
+  });
+
+  syncChipsAllState();
+  applyFilters();
 }
 
 
@@ -652,14 +813,49 @@ function applyFilters(){
   const q = $("#search").value || "";
   const tks = tokens(q);
 
-  const filtered = people.filter(p=> activeCompanies.has(p.entite) && matchesQuery(p, tks));
+  console.log("[Filters] Applying filters - Active domains:", Array.from(activeDomains), "Active companies:", Array.from(activeCompanies));
+
+  const filtered = people.filter(p=> {
+    // Filter by entity
+    if (!activeCompanies.has(p.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (activeDomains.size > 0) {
+      // Parse domains from THIS specific person
+      const personDomains = (p.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
+
+      if (personDomains.length === 0) return false;
+
+      // Check if THIS person has at least one of the active domains
+      let hasActiveDomain = false;
+      for (const domain of activeDomains) {
+        if (personDomains.includes(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
+    // Filter by search query
+    return matchesQuery(p, tks);
+  });
+
+  console.log("[Filters] Filtered results:", filtered.length, "out of", people.length);
+
   renderList(filtered);
 
   // Mémorise quels indices sont visibles, puis applique jitter + ajout au layer
   const idxByRef = new Map(people.map((p,i)=>[p, i]));
   markersLayer.__visibleIdx = filtered.map(p => idxByRef.get(p));
 
-  reflowJitter(); // positionne et affiche uniquement les visibles
+  // Reset zoom tracking to force recalculation after filter change
+  _lastZoom = null;
+
+  reflowJitter(true); // true = rebuild layers (filtre a changé)
 }
 
 
@@ -683,19 +879,46 @@ function annuaireExportExcel() {
 
   const filtered = people.filter(p => {
     if (!activeCompanies.has(p.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (activeDomains.size > 0) {
+      const personDomains = (p.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
+
+      if (personDomains.length === 0) return false;
+
+      let hasActiveDomain = false;
+      for (const domain of activeDomains) {
+        if (personDomains.includes(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
     return matchesQuery(p, tks);
   });
 
-  const exportData = filtered.map(p => ({
-    "Prénom": p.prenom,
-    "Nom": p.nom,
-    "Entité": p.entite,
-    "Poste": p.poste,
-    "Ville": p.ville,
-    "Téléphone": p.tel,
-    "Email": p.email,
-    "Compétences": p.competences
-  }));
+  // Include Domaine column only if at least one filtered item has a non-empty domaine
+  const hasDomaine = filtered.some(p => (p.domaine || "").trim() !== "");
+
+  const exportData = filtered.map(p => {
+    const row = {
+      "Prénom": p.prenom,
+      "Nom": p.nom,
+      "Entité": p.entite,
+      "Poste": p.poste,
+      "Ville": p.ville,
+      "Téléphone": p.tel,
+      "Email": p.email,
+      "Compétences": p.competences
+    };
+    if (hasDomaine) row["Domaine"] = p.domaine || "";
+    return row;
+  });
 
   const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();
@@ -939,12 +1162,14 @@ async function main(){
   }
 
   const companies = computePalette(people);
+  domainsByEntity = computeDomainsByEntity(people);
   renderCompanyChips(companies);
   addMarkers();
   renderList(people);
   applyFilters();
 
   $("#filtersReset").addEventListener("click", ()=>{
+    activeDomains.clear();
     renderCompanyChips(companies);
     $("#search").value = "";
     applyFilters();

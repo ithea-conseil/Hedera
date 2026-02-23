@@ -37,12 +37,14 @@ let references = [];
 let refMarkers = [];
 let refActiveCompanies = new Set();
 let refCompanyColors = new Map();
+let refActiveDomains = new Set(); // Domaines actifs pour le filtrage
+let refDomainsByEntity = new Map(); // Map<entite, Set<domaine>>
 let refMarkersLayer;
 
 // --- Jitter des marqueurs (répartition en anneaux hexagonaux) ---
-function refJitterLatLng(baseLatLng, indexInGroup, groupSize){
+function refJitterLatLng(baseLatLng, indexInGroup, groupSize, zoom){
   if (!refMap) return baseLatLng;
-  const zoom = refMap.getZoom();
+  if (zoom === undefined) zoom = refMap.getZoom();
   // amplitude en pixels (diminue quand on zoome)
   const basePx = Math.max(0, Math.min(18, (14 + zoom) * 2 + 4));
   if (groupSize <= 1 || basePx === 0) return baseLatLng;
@@ -65,10 +67,33 @@ function refJitterLatLng(baseLatLng, indexInGroup, groupSize){
   return refMap.layerPointToLatLng(p2);
 }
 
-// Recalcule la position décalée des marqueurs visibles et les (ré)ajoute au layer
-function refReflowJitter(){
+// Track last zoom level to avoid unnecessary recalculations
+let _refLastZoom = null;
+
+// Throttle for updating positions during zoom animation (not after)
+let _refZoomThrottleTimer = null;
+function refHandleZoomThrottled(){
+  if (_refZoomThrottleTimer) return; // Skip if already scheduled
+  _refZoomThrottleTimer = setTimeout(() => {
+    refReflowJitter(false);
+    _refZoomThrottleTimer = null;
+  }, 50); // Update every 50ms during zoom animation
+}
+
+// Recalcule la position décalée des marqueurs visibles
+// updateLayers=true : reconstruit complètement (appelé après changement de filtre)
+// updateLayers=false : met juste à jour les positions (appelé pendant zoom)
+function refReflowJitter(updateLayers = false){
   if (!refMarkersLayer || !refMap) return;
+
+  const currentZoom = refMap.getZoom();
   const visibleIdx = refMarkersLayer.__visibleIdx || [];
+
+  // Skip if zoom hasn't changed (within 0.1 levels) AND not forcing update
+  if (!updateLayers && _refLastZoom !== null && Math.abs(currentZoom - _refLastZoom) < 0.1) {
+    return;
+  }
+  _refLastZoom = currentZoom;
 
   // regroupe par coordonnées exactes (~1e-5°)
   const groups = new Map(); // "lat,lon" -> [indices]
@@ -79,18 +104,37 @@ function refReflowJitter(){
     groups.get(key).push(idx);
   });
 
-  refMarkersLayer.clearLayers();
-  for (const [key, arr] of groups){
-    const [lat, lon] = key.split(',').map(Number);
-    const base = L.latLng(lat, lon);
-    const n = arr.length;
-    arr.forEach((idx, k)=>{
-      const m = refMarkers[idx];
-      if (!m) return;
-      const j = refJitterLatLng(base, k, n);
-      m.setLatLng(j);
-      refMarkersLayer.addLayer(m);
-    });
+  if (updateLayers) {
+    // Complete rebuild: clear and re-add all markers (only when filters change)
+    refMarkersLayer.clearLayers();
+
+    for (const [key, arr] of groups){
+      const [lat, lon] = key.split(',').map(Number);
+      const base = L.latLng(lat, lon);
+      const n = arr.length;
+
+      arr.forEach((idx, k)=>{
+        const m = refMarkers[idx];
+        if (!m) return;
+        const j = refJitterLatLng(base, k, n, currentZoom);
+        m.setLatLng(j);
+        refMarkersLayer.addLayer(m);
+      });
+    }
+  } else {
+    // Just update positions during zoom (MUCH faster, no flicker)
+    for (const [key, arr] of groups){
+      const [lat, lon] = key.split(',').map(Number);
+      const base = L.latLng(lat, lon);
+      const n = arr.length;
+
+      arr.forEach((idx, k)=>{
+        const m = refMarkers[idx];
+        if (!m) return;
+        const j = refJitterLatLng(base, k, n, currentZoom);
+        m.setLatLng(j); // Only update position, don't touch layers
+      });
+    }
   }
 }
 
@@ -99,6 +143,24 @@ function refReflowJitter(){
 function fmtMoney(v) {
   if (v === null || v === undefined || Number.isNaN(v)) return "";
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(v);
+}
+
+/* Format intitulé as chips */
+function fmtIntitule(intitule) {
+  if (!intitule) return "";
+
+  const items = intitule
+    .split(";")
+    .map(item => item.trim())
+    .filter(Boolean);
+
+  if (items.length === 0) return "";
+
+  const chips = items
+    .map(item => `<span class="intitule-chip">${item}</span>`)
+    .join("");
+
+  return `<div class="intitule-chips">${chips}</div>`;
 }
 
 /* Color palette */
@@ -118,19 +180,57 @@ function refComputePalette(items) {
   return uniq;
 }
 
+/* Compute domains per entity */
+function refComputeDomainsByEntity(items){
+  const domainMap = new Map();
+
+  items.forEach(r => {
+    const entity = r.entite;
+    const domaineRaw = r.domaine || "";
+
+    if (!entity) return;
+
+    // Split domains by comma, semicolon, or pipe
+    const domains = domaineRaw
+      .split(/[,;|]+/)
+      .map(d => d.trim())
+      .filter(Boolean);
+
+    if (!domainMap.has(entity)) {
+      domainMap.set(entity, new Set());
+    }
+
+    domains.forEach(d => {
+      domainMap.get(entity).add(d);
+    });
+  });
+
+  return domainMap;
+}
+
 /* Init Leaflet map for References */
 function initRefMap() {
   if (!refMap) {
-    refMap = L.map("refMap", { zoomControl: false }).setView([46.71109, 1.7191036], 6);
+    refMap = L.map("refMap", {
+      zoomControl: false,
+      preferCanvas: true,
+      zoomAnimation: true,
+      fadeAnimation: true,
+      markerZoomAnimation: false
+    }).setView([46.71109, 1.7191036], 6);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19
+      maxZoom: 19,
+      updateWhenZooming: false,
+      updateInterval: 200
     }).addTo(refMap);
     L.control.zoom({ position: "bottomleft" }).addTo(refMap);
     refMarkersLayer = L.layerGroup().addTo(refMap);
 
-    // Recalcule l’écartement quand on zoome/dézoome
-    refMap.on('zoomend', refReflowJitter);
+    // Met à jour les positions PENDANT le zoom (throttled) pour éviter les flash
+    refMap.on('zoom', refHandleZoomThrottled);
+    // Et une dernière fois à la fin pour être précis
+    refMap.on('zoomend', () => refReflowJitter(false));
 
     
     // Force l'invalidation de la taille après un court délai
@@ -187,6 +287,7 @@ async function loadReferences() {
       mail: obj["Mail"] || "",
       tel: obj["Tél"] || "",
       montant: refParseNumber(obj["Montant"]),
+      domaine: obj["Domaine"] || "",
       lat: lat,
       lon: lon
     };
@@ -225,10 +326,10 @@ function refAddMarkers() {
 
     const m = L.marker([ref.lat, ref.lon], { icon, riseOnHover: true, __entite: ref.entite });
 
-    // Hover tooltip - format simple comme l'Annuaire
+    // Hover tooltip - with chips formatting
     m.on('mouseover', () => {
-    const tooltip = String(ref.intitule || "").trim();
-    m.bindTooltip(tooltip || "Référence", {
+    const tooltipHTML = fmtIntitule(ref.intitule) || "Référence";
+    m.bindTooltip(tooltipHTML, {
       className: 'mini-tip ref-tip',   // <- extra classe pour cibler le style
       direction: 'top',
       offset: [0, -12.5],
@@ -265,7 +366,7 @@ const html = `
         ${initial}
       </div>
       <div class="ref-popup-body">
-        <div class="name">${ref.intitule || ""}</div>
+        ${fmtIntitule(ref.intitule)}
 
         <div class="meta">
           ${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}
@@ -329,7 +430,7 @@ function refRenderList(items) {
           ${initial}
         </div>
         <div class="person-body">
-          <div class="name">${ref.intitule || ""}</div>
+          ${fmtIntitule(ref.intitule)}
           <div class="meta">${ref.annee || ""} ${ref.cheffe ? "• " + ref.cheffe : ""}</div>
           <div class="meta">${fmtMoney(ref.montant)}</div>
         </div>
@@ -342,8 +443,24 @@ function refRenderList(items) {
       const idx = references.indexOf(ref);
       const m = refMarkers[idx];
       if (m && refMap) {
-        refMap.flyTo(m.getLatLng(), Math.max(refMap.getZoom(), 9), { duration: .5 });
-        setTimeout(() => m.fire('click'), 520);
+        const targetZoom = Math.max(refMap.getZoom(), 9);
+
+        // Disable reflow temporarily to prevent popup from closing
+        refMap.off('zoom', refHandleZoomThrottled);
+        refMap.off('zoomend');
+
+        refMap.flyTo(m.getLatLng(), targetZoom, { duration: .5 });
+
+        setTimeout(() => {
+          // Re-enable reflow
+          refMap.on('zoom', refHandleZoomThrottled);
+          refMap.on('zoomend', () => refReflowJitter(false));
+
+          // Close tooltip before opening popup
+          if (m.closeTooltip) m.closeTooltip();
+          // Open popup directly instead of firing click event
+          refOpenPopup(ref, m);
+        }, 520);
       }
     });
 
@@ -360,6 +477,10 @@ function refRenderCompanyChips(all) {
   refActiveCompanies = new Set(all);
 
   all.forEach(name => {
+    // Create container for chip + domain bubbles
+    const container = document.createElement("div");
+    container.className = "chip-container";
+
     const btn = document.createElement("button");
     btn.className = "chip active";
     btn.dataset.value = name;
@@ -381,11 +502,85 @@ function refRenderCompanyChips(all) {
           document.querySelectorAll("#refFilters .chip").forEach(c => c.classList.add("active"));
         }
       }
+
+      // IMPORTANT: Clear domain filters when changing entity
+      // Otherwise domains from entity A will filter references from entity B
+      refActiveDomains.clear();
+      // Update visual state of all domain bubbles
+      document.querySelectorAll(".domain-bubble").forEach(bubble => {
+        bubble.classList.remove("active");
+      });
+
       refApplyFilters();
     });
 
-    refFiltersContainer.appendChild(btn);
+    container.appendChild(btn);
+
+    // Add domain bubbles if entity has domains
+    const entityDomains = refDomainsByEntity.get(name);
+    if (entityDomains && entityDomains.size > 0) {
+      const domainsContainer = document.createElement("div");
+      domainsContainer.className = "domain-bubbles";
+
+      Array.from(entityDomains).forEach(domain => {
+        const domainBubble = document.createElement("button");
+        domainBubble.className = "domain-bubble";
+        domainBubble.textContent = domain;
+        domainBubble.dataset.domain = domain;
+
+        // Check if domain is active
+        if (refActiveDomains.has(domain)) {
+          domainBubble.classList.add("active");
+        }
+
+        domainBubble.addEventListener("click", (e)=>{
+          e.stopPropagation();
+          refToggleDomain(domain, name);
+        });
+
+        domainsContainer.appendChild(domainBubble);
+      });
+
+      container.appendChild(domainsContainer);
+    }
+
+    refFiltersContainer.appendChild(container);
   });
+}
+
+function refToggleDomain(domain, entityName){
+  console.log("[Ref Domain Filter] Toggle domain:", domain);
+
+  // When clicking a domain bubble, always select ONLY the parent entity
+  if (entityName) {
+    console.log("[Ref Domain Filter] Setting exclusive selection for:", entityName);
+
+    // Set exclusive selection: only this entity
+    refActiveCompanies = new Set([entityName]);
+
+    // Update chip visual state: only this chip is active
+    document.querySelectorAll("#refFilters .chip").forEach(chip => {
+      chip.classList.toggle("active", chip.dataset.value === entityName);
+    });
+  }
+
+  if (refActiveDomains.has(domain)) {
+    refActiveDomains.delete(domain);
+    console.log("[Ref Domain Filter] Removed domain:", domain);
+  } else {
+    refActiveDomains.add(domain);
+    console.log("[Ref Domain Filter] Added domain:", domain);
+  }
+
+  console.log("[Ref Domain Filter] Active domains:", Array.from(refActiveDomains));
+
+  // Update visual state of all domain bubbles
+  document.querySelectorAll(".domain-bubble").forEach(bubble => {
+    const bubbleDomain = bubble.dataset.domain;
+    bubble.classList.toggle("active", refActiveDomains.has(bubbleDomain));
+  });
+
+  refApplyFilters();
 }
 
 /* Apply filters */
@@ -394,23 +589,54 @@ function refApplyFilters() {
   const q = refSearchInput.value || "";
   const tks = refTokens(q);
 
+  console.log("[Ref Filters] Applying filters - Active domains:", Array.from(refActiveDomains), "Active companies:", Array.from(refActiveCompanies));
+
   const filtered = references.filter(ref => {
+    // Filter by entity
     if (!refActiveCompanies.has(ref.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (refActiveDomains.size > 0) {
+      // Parse domains from THIS specific reference
+      const refDomains = (ref.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
+
+      if (refDomains.length === 0) return false;
+
+      // Check if THIS reference has at least one of the active domains
+      let hasActiveDomain = false;
+      for (const domain of refActiveDomains) {
+        if (refDomains.includes(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
+    // Filter by search query
     if (!tks.length) return true;
     const hay = refNorm([ref.entite, ref.intitule, ref.territoire, ref.annee, ref.cheffe, ref.nomReferent, ref.titreReferent].join(" "));
     return tks.every(t => hay.includes(t));
   });
 
+  console.log("[Ref Filters] Filtered results:", filtered.length, "out of", references.length);
+
   refRenderList(filtered);
-  
+
   // Update map (avec jitter)
   if (refMarkersLayer) {
-    // mémorise l’ensemble des indices visibles dans l’ordre de la liste filtrée
+    // mémorise l'ensemble des indices visibles dans l'ordre de la liste filtrée
     const idxByRef = new Map(references.map((r,i)=>[r, i]));
     refMarkersLayer.__visibleIdx = filtered.map(r => idxByRef.get(r));
 
-    // applique l’écartement en fonction du zoom courant
-    refReflowJitter();
+    // Reset zoom tracking to force recalculation after filter change
+    _refLastZoom = null;
+
+    // applique l'écartement en fonction du zoom courant
+    refReflowJitter(true); // true = rebuild layers (filtre a changé)
   }
 
 }
@@ -430,6 +656,26 @@ function refExportExcel() {
 
   const filtered = references.filter(ref => {
     if (!refActiveCompanies.has(ref.entite)) return false;
+
+    // Filter by domain (if any domains are selected)
+    if (refActiveDomains.size > 0) {
+      const refDomains = (ref.domaine || "")
+        .split(/[,;|]+/)
+        .map(d => d.trim())
+        .filter(Boolean);
+
+      if (refDomains.length === 0) return false;
+
+      let hasActiveDomain = false;
+      for (const domain of refActiveDomains) {
+        if (refDomains.includes(domain)) {
+          hasActiveDomain = true;
+          break;
+        }
+      }
+      if (!hasActiveDomain) return false;
+    }
+
     if (!tks.length) return true;
     const hay = refNorm([
       ref.entite,
@@ -443,18 +689,25 @@ function refExportExcel() {
     return tks.every(t => hay.includes(t));
   });
 
-  const exportData = filtered.map(r => ({
-    "Entité": r.entite,
-    "Intitulé mission": r.intitule,
-    "Territoire": r.territoire,
-    "Année": r.annee,
-    "Cheffe de projet": r.cheffe,
-    "Titre référent": r.titreReferent,
-    "Nom référent": r.nomReferent,
-    "Mail": r.mail,
-    "Tél": r.tel,
-    "Montant": r.montant
-  }));
+  // Include Domaine column only if at least one filtered item has a non-empty domaine
+  const hasDomaine = filtered.some(r => (r.domaine || "").trim() !== "");
+
+  const exportData = filtered.map(r => {
+    const row = {
+      "Entité": r.entite,
+      "Intitulé mission": r.intitule,
+      "Territoire": r.territoire,
+      "Année": r.annee,
+      "Cheffe de projet": r.cheffe,
+      "Titre référent": r.titreReferent,
+      "Nom référent": r.nomReferent,
+      "Mail": r.mail,
+      "Tél": r.tel,
+      "Montant": r.montant
+    };
+    if (hasDomaine) row["Domaine"] = r.domaine || "";
+    return row;
+  });
 
   const ws = XLSX.utils.json_to_sheet(exportData);
   const wb = XLSX.utils.book_new();
@@ -538,9 +791,10 @@ async function initReferences() {
     // 2. Load data
     references = await loadReferences();
     console.log("[Références] Données chargées:", references.length, "références");
-    
+
     // 3. Setup UI
     const companies = refComputePalette(references);
+    refDomainsByEntity = refComputeDomainsByEntity(references);
     refRenderCompanyChips(companies);
     refAddMarkers();
     refRenderList(references);
@@ -560,6 +814,7 @@ async function initReferences() {
     // Bouton Réinitialiser
     if (refFiltersResetBtn) {
       refFiltersResetBtn.addEventListener("click", () => {
+        refActiveDomains.clear();
         refRenderCompanyChips(companies);
         refSearchInput.value = "";
         refApplyFilters();
