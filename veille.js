@@ -487,7 +487,6 @@ async function runSearch(opts = {}){
       ? `${rows.length.toLocaleString('fr-FR')} résultats affichés (il y en a d'autres)`
       : `${rows.length.toLocaleString('fr-FR')} résultats`;
     const total = Number.isFinite(+data.total) ? +data.total : null;
-    const hasMore = !!data.has_more;
     const shown = Math.min(limit, total, rows.length);
 
     renderCards(rows);
@@ -577,6 +576,7 @@ function initVeille(){
 }
 
 document.addEventListener("DOMContentLoaded", initVeille);
+
 
 
 
