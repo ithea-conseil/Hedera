@@ -362,7 +362,7 @@ body.ref-panel-collapsed #refPanelToggle{ transform:none }
 }
 .pill.muted{ opacity:.9 }
 
-a.pill.muted.veille-decp-pill {
+.pill.muted.veille-decp-pill {
     bottom: 8px;
     right: 50%;
     position:fixed;
