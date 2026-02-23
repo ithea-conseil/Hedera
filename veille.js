@@ -3,7 +3,7 @@
 
 const SUPABASE_URL = "https://mpgsqniaarczuznkoapr.supabase.co";
 const SUPABASE_SCHEMA = "api";
-const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || ""; 
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wZ3NxbmlhYXJjenV6bmtvYXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MDQzMTIsImV4cCI6MjA4NzM4MDMxMn0.VHPFf73EBYbpYetEe6VcY06iM4rzJDNyC4iJH05mG0s" || ""; 
 
 // ou injecte-la depuis tes secrets / env côté build
 let veilleMap;           // carte Leaflet dédiée à la veille
@@ -577,5 +577,6 @@ function initVeille(){
 }
 
 document.addEventListener("DOMContentLoaded", initVeille);
+
 
 
