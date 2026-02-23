@@ -159,7 +159,7 @@ function initVeilleMap(){
 function renderMap(rows, mapMax, opts = {}){
   const preserveView = !!opts.preserveView;
   ensureVeilleLayer();
-  if (!veilleLayer) return;
+  if (!veilleLayer) return 0;
   veilleLayer.clearLayers();
 
   _veilleLastMapMax = mapMax;
@@ -240,10 +240,12 @@ function renderMap(rows, mapMax, opts = {}){
   }
 
   if (!preserveView && markers.length){
-    try { 
-      veilleMap.fitBounds(L.featureGroup(markers).getBounds().pad(0.2)); 
+    try {
+      veilleMap.fitBounds(L.featureGroup(markers).getBounds().pad(0.2));
     } catch(e){}
   }
+
+  return pts.length;
 }
 
 /* ---- Cartes (remplace la table/UID masqué) ---- */
@@ -512,16 +514,17 @@ async function runSearch(opts = {}){
     const data = await fetchRowsCombined({ q, awardees, limit, offset: 0 });
     const rows = Array.isArray(data.rows) ? data.rows : [];
     const hasMore = !!data.has_more;
-    
-    // compteur perf-first (sans total exact)
-    V_COUNT.textContent = hasMore
-      ? `${rows.length.toLocaleString('fr-FR')} résultats affichés (il y en a d'autres)`
-      : `${rows.length.toLocaleString('fr-FR')} résultats`;
-    const total = Number.isFinite(+data.total) ? +data.total : null;
-    const shown = Math.min(limit, total, rows.length);
 
     renderCards(rows);
-    renderMap(rows, mapMax);
+    const geoCount = renderMap(rows, mapMax);
+
+    // Compteur : total résultats + mention des non-localisés si besoin
+    const moreSuffix = hasMore ? ' (il y en a d\'autres)' : '';
+    if (geoCount < rows.length) {
+      V_COUNT.textContent = `${rows.length.toLocaleString('fr-FR')} résultats, ${geoCount.toLocaleString('fr-FR')} localisés sur la carte${moreSuffix}`;
+    } else {
+      V_COUNT.textContent = `${rows.length.toLocaleString('fr-FR')} résultats${moreSuffix}`;
+    }
   }catch(e){
     console.error("[Veille] runSearch error:", e);
     V_COUNT.textContent = "Erreur de chargement";
