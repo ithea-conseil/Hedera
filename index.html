@@ -282,6 +282,25 @@
 
   <!-- === VUE : VEILLE CONCURRENTIELLE (UI basée sur veille.js) === -->
   <section id="view-veille" class="view" aria-label="Section Veille concurrentielle">
+
+    <!-- Bannière nouveautés - refermable -->
+    <div id="veilleBanner" class="veille-banner hidden" role="region" aria-label="Nouveautés veille concurrentielle">
+      <div class="veille-banner-card">
+        <button class="veille-banner-close" id="veilleBannerClose" aria-label="Fermer">✕</button>
+        <span class="veille-banner-badge">Nouveautés</span>
+        <ul class="veille-banner-list">
+          <li>Meilleures performances de recherche</li>
+          <li>Plus de quotas imposés</li>
+          <li>Combinez plusieurs filtres simultanément</li>
+        </ul>
+        <p class="veille-banner-text">
+          Accédez aux données brutes sur
+          <a href="https://decp.info/tableau" target="_blank" rel="noopener noreferrer" class="veille-banner-link">decp.info/tableau</a>
+          — pour des requêtes avancées et très précises.
+        </p>
+      </div>
+    </div>
+
     <!-- Carte indépendante -->
     <div id="veilleMap" class="hidden" aria-label="Carte des marchés"></div>
 
@@ -398,7 +417,28 @@
     (function(){
       let refMapInstance;
       let refInitialized = false;
-      
+
+      // ---- Bannière nouveautés Veille ----
+      const BANNER_KEY = 'veilleBannerDismissed_v1';
+      const veilleBanner   = document.getElementById('veilleBanner');
+      const veilleBannerClose = document.getElementById('veilleBannerClose');
+
+      function showVeilleBanner() {
+        let dismissed = false;
+        try { dismissed = localStorage.getItem(BANNER_KEY) === '1'; } catch(e) {}
+        if (!dismissed && veilleBanner) {
+          veilleBanner.classList.remove('hidden');
+        }
+      }
+
+      if (veilleBannerClose) {
+        veilleBannerClose.addEventListener('click', () => {
+          if (veilleBanner) veilleBanner.classList.add('hidden');
+          try { localStorage.setItem(BANNER_KEY, '1'); } catch(e) {}
+        });
+      }
+      // ---- fin bannière ----
+
       const byId = (id)=>document.getElementById(id);
       const views = {
         annuaire: byId('view-annuaire'),
@@ -471,6 +511,7 @@
           maps.veille.classList.remove('hidden');
           panels.veille.classList.remove('hidden');
           overlayVeille.classList.remove('hidden');
+          showVeilleBanner();
 
           maps.annuaire.classList.add('hidden'); panels.annuaire.classList.add('hidden');
           maps.references.classList.add('hidden'); panels.references.classList.add('hidden');
