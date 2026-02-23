@@ -542,6 +542,7 @@ function initVeille(){
   if (TAB_REF) TAB_REF.addEventListener("click", switchToAnnuaireOrRefs);
 
   V_GO.addEventListener("click", runSearch);
+  V_LIMIT.addEventListener("change", runSearch);
   V_EXPORT.addEventListener("click", exportExcel);
 
   // Hook up JPG export button
