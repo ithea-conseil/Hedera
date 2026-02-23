@@ -1,6 +1,11 @@
 /* ===== Veille concurrentielle ===== */
-const API_BASE = "https://veille-production.up.railway.app";
+// const API_BASE = "https://veille-production.up.railway.app";
 
+const SUPABASE_URL = "https://mpgsqniaarczuznkoapr.supabase.co";
+const SUPABASE_SCHEMA = "api";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1wZ3NxbmlhYXJjenV6bmtvYXByIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MDQzMTIsImV4cCI6MjA4NzM4MDMxMn0.VHPFf73EBYbpYetEe6VcY06iM4rzJDNyC4iJH05mG0s" || ""; 
+
+// ou injecte-la depuis tes secrets / env côté build
 let veilleMap;           // carte Leaflet dédiée à la veille
 let veilleLayer = null;  // calque points veille
 let currentRows = [];    // lignes affichées
@@ -83,6 +88,15 @@ function parseAwardees(text){
     .split(",")
     .map(s=>s.trim())
     .filter(Boolean);
+}
+
+function parseAwardees(value) {
+  if (!value) return null;
+  const arr = String(value)
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean);
+  return arr.length ? arr : null;
 }
 
 function ensureVeilleLayer(){
@@ -310,20 +324,34 @@ function renderCards(rows){
 }
 
 /* ---- API (unique fetch pour carte + cards) ---- */
-async function fetchRowsCombined({ q, awardees, limit }){
-  const params = { limit: limit || 50 };
-  if (q && q.trim()) params.q = q.trim();
-  const aw = parseAwardees(awardees);
-  if (aw.length) params.awardee = aw; // param multi
+async function fetchRowsCombined({ q, awardees, limit, offset = 0 }) {
+  const body = {
+    q: q && q.trim() ? q.trim() : null,
+    q_mode: "web",
+    awardee: parseAwardees(awardees), // tableau de strings
+    lim: limit || 50,
+    off: offset || 0
+  };
 
-  const url = `${API_BASE}/rows?${qs(params)}`;
-  const r = await fetch(url);
-  if (!r.ok){
+  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/veille_search_perf`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": SUPABASE_ANON_KEY,
+      "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+      "Accept-Profile": SUPABASE_SCHEMA,
+      "Content-Profile": SUPABASE_SCHEMA
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!r.ok) {
     const txt = await r.text();
-    throw new Error(txt);
+    throw new Error(txt || `HTTP ${r.status}`);
   }
-  const data = await r.json(); // { total, limit, offset, rows }
-  return data;
+
+  // Réponse attendue: { rows, has_more, limit, offset }
+  return await r.json();
 }
 
 /* ---- Export ---- */
@@ -450,12 +478,17 @@ async function runSearch(opts = {}){
   if (V_SPIN) V_SPIN.classList.remove("hidden");
 
   try{
-    const data = await fetchRowsCombined({ q, awardees, limit });
+    const data = await fetchRowsCombined({ q, awardees, limit, offset: 0 });
     const rows = Array.isArray(data.rows) ? data.rows : [];
-
-    const total = Number.isFinite(+data.total) ? +data.total : rows.length;
+    const hasMore = !!data.has_more;
+    
+    // compteur perf-first (sans total exact)
+    V_COUNT.textContent = hasMore
+      ? `${rows.length.toLocaleString('fr-FR')} résultats affichés (il y en a d'autres)`
+      : `${rows.length.toLocaleString('fr-FR')} résultats`;
+    const total = Number.isFinite(+data.total) ? +data.total : null;
+    const hasMore = !!data.has_more;
     const shown = Math.min(limit, total, rows.length);
-    V_COUNT.textContent = `${total.toLocaleString('fr-FR')} résultats (affichage des ${rows.length.toLocaleString('fr-FR')} premiers)`;
 
     renderCards(rows);
     renderMap(rows, mapMax);
@@ -544,4 +577,6 @@ function initVeille(){
 }
 
 document.addEventListener("DOMContentLoaded", initVeille);
+
+
 
